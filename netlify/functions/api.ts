@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { generateFallbackMealPlan } from "../../src/lib/mealPlanFallback";
+import { generateFallbackMealPlan, getFallbackShuffleMeal } from "../../src/lib/mealPlanFallback";
 
 const DIETITIAN_SYSTEM_INSTRUCTION = `
 You are NutriPlan AI, a qualified clinical dietitian AI specializing in personalized Indian vegetarian, zero-added-sugar diet planning based on non-refrigerated pantry stock, local market price bounds (₹150-₹200/day), and official dietary guidelines (ICMR/NIN 2024 and WHO).
@@ -22,21 +22,37 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: {
   config?: any;
   models?: string[];
 }): Promise<any> {
-  const modelsToTry = params.models || ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-2.5-pro"];
+  const modelsToTry = params.models || [
+    "gemini-2.5-flash",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.7-flash",
+  ];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: params.contents,
-        config: params.config,
-      });
-      if (response && response.text) {
-        return response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config: params.config,
+        });
+        if (response && response.text) {
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        const isQuotaErr = err?.status === 429 || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("quota");
+        
+        if (isQuotaErr) {
+          break;
+        }
+        if (attempt < 1) {
+          await new Promise((res) => setTimeout(res, 800));
+        }
       }
-    } catch (err: any) {
-      lastError = err;
     }
   }
   throw lastError;
@@ -96,6 +112,16 @@ export const handler = async (event: any, context: any) => {
           allergenSafetyCheck: "Safe for strict vegetarian diet",
           rawNote: response.text,
         }),
+      };
+    }
+
+    if (path.includes("shuffle-recipe")) {
+      const { mealSlot, currentMeal } = body;
+      const fallback = getFallbackShuffleMeal(mealSlot || currentMeal?.type || 'Breakfast', currentMeal?.name);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(fallback),
       };
     }
 

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { generateFallbackMealPlan } from './mealPlanFallback';
+import { generateFallbackMealPlan, getFallbackShuffleMeal } from './mealPlanFallback';
 
 /**
  * Returns the resolved API endpoint URL, taking into account VITE_API_BASE_URL or VITE_API_URL if configured.
@@ -111,6 +111,10 @@ async function handleClientSideGeminiFallback(endpoint: string, options: Request
       allergenSafetyCheck: 'Safe for strict vegetarian diet.',
       rawNote: response.text,
     };
+  }
+
+  if (endpoint.includes('shuffle-recipe')) {
+    return getFallbackShuffleMeal(body.mealSlot || 'Breakfast', body.currentMeal?.name);
   }
 
   if (endpoint.includes('generate-meal-plan')) {

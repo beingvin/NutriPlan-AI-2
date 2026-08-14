@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { getFallbackShuffleMeal } from "./src/lib/mealPlanFallback";
 
 const PORT = 3000;
 
@@ -41,23 +42,40 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: {
   config?: any;
   models?: string[];
 }): Promise<any> {
-  const modelsToTry = params.models || ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-2.5-pro"];
+  const modelsToTry = params.models || [
+    "gemini-2.5-flash",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.7-flash",
+  ];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    try {
-      console.log(`[Gemini API] Querying model: ${model}`);
-      const response = await ai.models.generateContent({
-        model,
-        contents: params.contents,
-        config: params.config,
-      });
-      if (response && response.text) {
-        return response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        console.log(`[Gemini API] Querying model: ${model} (attempt ${attempt + 1})`);
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config: params.config,
+        });
+        if (response && response.text) {
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        const isQuotaErr = err?.status === 429 || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("quota");
+        console.warn(`[Gemini API Info] Model ${model} attempt ${attempt + 1} failed: ${errMsg}`);
+        
+        // If quota exceeded (429), break retry loop immediately and try next model
+        if (isQuotaErr) {
+          break;
+        }
+        if (attempt < 1) {
+          await new Promise((res) => setTimeout(res, 800));
+        }
       }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[Gemini API Info] Model ${model} unavailable, trying fallback model...`);
     }
   }
   throw lastError;
@@ -586,6 +604,7 @@ Provide a structured JSON output with all 7 days (Day 1 to Day 7), exact portion
                       dayName: { type: Type.STRING },
                       totalProteinGrams: { type: Type.NUMBER },
                       totalCaloriesKcal: { type: Type.NUMBER },
+                      totalFiberGrams: { type: Type.NUMBER },
                       breakfast: {
                         type: Type.OBJECT,
                         properties: {
@@ -595,6 +614,7 @@ Provide a structured JSON output with all 7 days (Day 1 to Day 7), exact portion
                           portion: { type: Type.STRING },
                           caloriesKcal: { type: Type.NUMBER },
                           proteinGrams: { type: Type.NUMBER },
+                          fiberGrams: { type: Type.NUMBER },
                           ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                           preparationNotes: { type: Type.STRING },
                           isZeroAddedSugar: { type: Type.BOOLEAN },
@@ -611,6 +631,7 @@ Provide a structured JSON output with all 7 days (Day 1 to Day 7), exact portion
                           portion: { type: Type.STRING },
                           caloriesKcal: { type: Type.NUMBER },
                           proteinGrams: { type: Type.NUMBER },
+                          fiberGrams: { type: Type.NUMBER },
                           ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                           preparationNotes: { type: Type.STRING },
                           isZeroAddedSugar: { type: Type.BOOLEAN },
@@ -627,6 +648,7 @@ Provide a structured JSON output with all 7 days (Day 1 to Day 7), exact portion
                           portion: { type: Type.STRING },
                           caloriesKcal: { type: Type.NUMBER },
                           proteinGrams: { type: Type.NUMBER },
+                          fiberGrams: { type: Type.NUMBER },
                           ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                           preparationNotes: { type: Type.STRING },
                           isZeroAddedSugar: { type: Type.BOOLEAN },
@@ -643,6 +665,7 @@ Provide a structured JSON output with all 7 days (Day 1 to Day 7), exact portion
                           portion: { type: Type.STRING },
                           caloriesKcal: { type: Type.NUMBER },
                           proteinGrams: { type: Type.NUMBER },
+                          fiberGrams: { type: Type.NUMBER },
                           ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                           preparationNotes: { type: Type.STRING },
                           isZeroAddedSugar: { type: Type.BOOLEAN },
@@ -728,6 +751,75 @@ Ensure zero added sugar and allergen safety.
     } catch (error: any) {
       console.error("Substitution API error:", error);
       res.status(500).json({ error: error.message || "Failed to generate substitution" });
+    }
+  });
+
+  // Shuffle Recipe Endpoint
+  app.post("/api/shuffle-recipe", async (req, res) => {
+    try {
+      const { mealSlot, currentMeal, userProfile, inventory } = req.body;
+      const ai = getGeminiClient();
+
+      const inventoryList = Array.isArray(inventory)
+        ? inventory.map((i: any) => `${i.name} (${i.quantity} ${i.unit})`).join(", ")
+        : "Standard pantry staples";
+
+      const prompt = `
+Suggest a distinct alternative dish for the '${mealSlot || currentMeal?.type || 'Breakfast'}' slot in a high-protein, zero-added-sugar Indian vegetarian diet.
+
+CURRENT DISH TO REPLACE:
+- Name: ${currentMeal?.name || 'Current Meal'}
+- Ingredients currently used: ${(currentMeal?.ingredients || []).join(', ')}
+- Current portion: ${currentMeal?.portion || '1 serving'}
+- Current macros: ${currentMeal?.caloriesKcal || 350} kcal, ${currentMeal?.proteinGrams || 18}g protein
+
+REQUIREMENTS:
+- Must be a DIFFERENT delicious Indian vegetarian dish for ${mealSlot || 'this meal slot'}.
+- Should use the SAME key ingredients or available pantry stock: ${inventoryList}
+- Must have 0g added sugar.
+- Target calories: ~${currentMeal?.caloriesKcal || 350} kcal, Target protein: ~${currentMeal?.proteinGrams || 18}g.
+- Allergies to strictly exclude: [${(userProfile?.allergies || []).join(', ')}]
+`;
+
+      try {
+        const response = await generateContentWithRetry(ai, {
+          contents: prompt,
+          config: {
+            systemInstruction: DIETITIAN_SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                type: { type: Type.STRING },
+                portion: { type: Type.STRING },
+                caloriesKcal: { type: Type.NUMBER },
+                proteinGrams: { type: Type.NUMBER },
+                fiberGrams: { type: Type.NUMBER },
+                ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
+                preparationNotes: { type: Type.STRING },
+                isZeroAddedSugar: { type: Type.BOOLEAN },
+                usesPantryStock: { type: Type.BOOLEAN },
+              },
+              required: ["name", "portion", "caloriesKcal", "proteinGrams", "ingredients", "preparationNotes", "isZeroAddedSugar", "usesPantryStock"]
+            }
+          }
+        });
+
+        const newMeal = JSON.parse(response.text || "{}");
+        if (!newMeal.id) newMeal.id = `shuffled-${Date.now()}`;
+        if (!newMeal.type) newMeal.type = mealSlot || currentMeal?.type || 'Breakfast';
+        res.json(newMeal);
+      } catch (err) {
+        console.warn("Shuffle AI fallback triggered:", err);
+        const fallback = getFallbackShuffleMeal(mealSlot || currentMeal?.type || 'Breakfast', currentMeal?.name);
+        res.json(fallback);
+      }
+    } catch (error: any) {
+      console.error("Shuffle recipe API error:", error);
+      const fallback = getFallbackShuffleMeal(req.body?.mealSlot || 'Breakfast', req.body?.currentMeal?.name);
+      res.json(fallback);
     }
   });
 

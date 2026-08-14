@@ -29,6 +29,7 @@ export interface Meal {
   portion: string;
   caloriesKcal: number;
   proteinGrams: number;
+  fiberGrams?: number;
   carbsGrams?: number;
   fatGrams?: number;
   ingredients: string[];
@@ -46,6 +47,7 @@ export interface DayPlan {
   dinner: Meal;
   totalProteinGrams: number;
   totalCaloriesKcal: number;
+  totalFiberGrams?: number;
 }
 
 export interface ShoppingListItem {

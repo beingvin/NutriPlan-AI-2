@@ -15,15 +15,44 @@ import {
   PRESET_LOW_STOCK,
   PRESET_HIGH_PROTEIN,
 } from './data/pantryPresets';
+import {
+  saveUserProfileStorage,
+  loadUserProfileStorage,
+  saveMealPlanStorage,
+  loadMealPlanStorage,
+  saveInventoryStorage,
+  loadInventoryStorage,
+  addPlanToHistory,
+} from './lib/storage';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'planner' | 'chat' | 'pantry' | 'shopping' | 'profile'>('planner');
-  const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
-  const [inventory, setInventory] = useState<PantryItem[]>(PRESET_FULL_PANTRY);
-  const [plan, setPlan] = useState<WeeklyMealPlan | null>(null);
+
+  // Load initial state from Cookies / LocalStorage persistence
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    return loadUserProfileStorage() || DEFAULT_USER_PROFILE;
+  });
+
+  const [inventory, setInventory] = useState<PantryItem[]>(() => {
+    return loadInventoryStorage() || PRESET_FULL_PANTRY;
+  });
+
+  const [plan, setPlan] = useState<WeeklyMealPlan | null>(() => {
+    return loadMealPlanStorage();
+  });
+
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+
+  // Sync user profile & inventory changes to persistent storage
+  useEffect(() => {
+    saveUserProfileStorage(userProfile);
+  }, [userProfile]);
+
+  useEffect(() => {
+    saveInventoryStorage(inventory);
+  }, [inventory]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -31,19 +60,22 @@ export default function App() {
   };
 
   const handleLoadPreset = (preset: 'full' | 'low' | 'high_protein') => {
+    let newInventory = inventory;
     if (preset === 'full') {
-      setInventory(PRESET_FULL_PANTRY);
+      newInventory = PRESET_FULL_PANTRY;
       setUserProfile((prev) => ({ ...prev, proteinTargetGrams: 80, dailyBudgetInr: 175 }));
       showToast('Loaded Full Stock Pantry (Dals, Rice, Soya, Fruits, Dairy)');
     } else if (preset === 'low') {
-      setInventory(PRESET_LOW_STOCK);
+      newInventory = PRESET_LOW_STOCK;
       setUserProfile((prev) => ({ ...prev, proteinTargetGrams: 75, dailyBudgetInr: 150 }));
       showToast('Loaded Low Stock Pantry (No Dairy, No Fresh Sprouts)');
     } else if (preset === 'high_protein') {
-      setInventory(PRESET_HIGH_PROTEIN);
+      newInventory = PRESET_HIGH_PROTEIN;
       setUserProfile((prev) => ({ ...prev, proteinTargetGrams: 100, dailyBudgetInr: 195 }));
       showToast('Loaded High Protein Pantry (100g Target with extra Soya & Kala Chana)');
     }
+    setInventory(newInventory);
+    saveInventoryStorage(newInventory);
   };
 
   const handleGeneratePlan = async (customPrompt?: string) => {
@@ -59,6 +91,8 @@ export default function App() {
       });
 
       setPlan(data);
+      saveMealPlanStorage(data);
+      addPlanToHistory(data);
       setActiveTab('planner');
       showToast('Successfully generated 7-Day Vegetarian Meal Plan!');
     } catch (err: any) {
@@ -69,9 +103,15 @@ export default function App() {
     }
   };
 
-  // Auto generate initial plan on mount if not available
+  const handleUpdatePlan = (updatedPlan: WeeklyMealPlan) => {
+    setPlan(updatedPlan);
+    saveMealPlanStorage(updatedPlan);
+  };
+
+  // Auto generate initial plan on mount ONLY if no saved plan exists
   useEffect(() => {
-    if (!plan && !loadingPlan) {
+    const savedPlan = loadMealPlanStorage();
+    if (!savedPlan && !plan && !loadingPlan) {
       handleGeneratePlan();
     }
   }, []);
@@ -114,6 +154,7 @@ export default function App() {
             plan={plan}
             loading={loadingPlan}
             onGeneratePlan={handleGeneratePlan}
+            onUpdatePlan={handleUpdatePlan}
             inventory={inventory}
             userProfile={userProfile}
           />

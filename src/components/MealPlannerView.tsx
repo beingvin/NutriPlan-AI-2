@@ -1,12 +1,28 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { WeeklyMealPlan, Meal, PantryItem, UserProfile } from '../types';
 import { SubstitutionModal } from './SubstitutionModal';
-import { Sparkles, CheckCircle2, ShieldCheck, RefreshCw, Printer, AlertTriangle, ArrowRightLeft, Leaf, Flame, HeartPulse } from 'lucide-react';
+import {
+  Sparkles, CheckCircle2, ShieldCheck, RefreshCw, Printer, ArrowRightLeft,
+  Leaf, Flame, HeartPulse, Wheat, Activity, Shuffle, Loader2, FileText,
+  Copy, Check, Share2, MessageSquare, X, Calendar, Download, Droplet,
+  Droplets, Plus, Minus, RotateCcw, Bookmark, BookmarkCheck, History, Code,
+  Search, Trash2, ExternalLink, Filter
+} from 'lucide-react';
+import { apiFetch } from '../lib/api';
+import {
+  saveFavoritesStorage,
+  loadFavoritesStorage,
+  loadMealPlanHistoryStorage,
+  BookmarkedMeal,
+  SavedPlanHistory,
+} from '../lib/storage';
 
 interface MealPlannerViewProps {
   plan: WeeklyMealPlan | null;
   loading: boolean;
   onGeneratePlan: (customPrompt?: string) => void;
+  onUpdatePlan?: (plan: WeeklyMealPlan) => void;
   inventory: PantryItem[];
   userProfile: UserProfile;
 }
@@ -15,6 +31,7 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
   plan,
   loading,
   onGeneratePlan,
+  onUpdatePlan,
   inventory,
   userProfile,
 }) => {
@@ -23,6 +40,86 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
   const [subModalOpen, setSubModalOpen] = useState(false);
   const [subMealName, setSubMealName] = useState('');
   const [subIngredient, setSubIngredient] = useState('');
+  const [shufflingSlot, setShufflingSlot] = useState<string | null>(null);
+  const [shuffleToast, setShuffleToast] = useState<string | null>(null);
+
+  // Sub-navigation tab: 'weekly' | 'favorites' | 'history'
+  const [plannerSubTab, setPlannerSubTab] = useState<'weekly' | 'favorites' | 'history'>('weekly');
+
+  // Favorites / Bookmarks State
+  const [favorites, setFavorites] = useState<BookmarkedMeal[]>(() => loadFavoritesStorage());
+  const [favoriteSearch, setFavoriteSearch] = useState('');
+  const [favoriteCategory, setFavoriteCategory] = useState<string>('all');
+
+  // JSON Inspector & History State
+  const [jsonViewTab, setJsonViewTab] = useState<'meal_plan' | 'profile' | 'pantry' | 'history'>('meal_plan');
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [historyList, setHistoryList] = useState<SavedPlanHistory[]>(() => loadMealPlanHistoryStorage());
+
+  // Print & Export States
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [printScope, setPrintScope] = useState<'all' | 'single'>('all');
+  const [copiedText, setCopiedText] = useState(false);
+  const [textFormatStyle, setTextFormatStyle] = useState<'whatsapp' | 'simple'>('whatsapp');
+
+  // Water Intake Tracker State (Keyed by dayNumber, stored in localStorage)
+  const [waterLogs, setWaterLogs] = useState<Record<number, number>>(() => {
+    try {
+      const saved = localStorage.getItem('nutriplan_water_logs');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const updateWaterIntake = (dayNum: number, newCount: number) => {
+    const validCount = Math.max(0, Math.min(16, newCount));
+    const updated = { ...waterLogs, [dayNum]: validCount };
+    setWaterLogs(updated);
+    try {
+      localStorage.setItem('nutriplan_water_logs', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleBookmark = (meal: Meal, slotLabel: string) => {
+    if (!meal) return;
+    const mealId = meal.id || `${meal.name}_${slotLabel}`;
+    const isAlready = favorites.some((f) => f.id === mealId || f.name === meal.name);
+
+    let updated: BookmarkedMeal[];
+    if (isAlready) {
+      updated = favorites.filter((f) => f.id !== mealId && f.name !== meal.name);
+      setShuffleToast(`Removed "${meal.name}" from Favorites`);
+    } else {
+      const newFav: BookmarkedMeal = {
+        ...meal,
+        id: mealId,
+        dayName: currentDay?.dayName || `Day ${selectedDayIndex + 1}`,
+        dayNumber: currentDay?.dayNumber || (selectedDayIndex + 1),
+        mealSlot: slotLabel,
+        bookmarkedAt: new Date().toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      };
+      updated = [newFav, ...favorites];
+      setShuffleToast(`Bookmarked "${meal.name}" to Favorites! ⭐`);
+    }
+
+    setFavorites(updated);
+    saveFavoritesStorage(updated);
+    setTimeout(() => setShuffleToast(null), 3000);
+  };
+
+  const isMealBookmarked = (meal: Meal) => {
+    if (!meal) return false;
+    return favorites.some((f) => f.id === meal.id || f.name === meal.name);
+  };
 
   if (loading) {
     return (
@@ -64,39 +161,250 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
 
   const currentDay = plan.days[selectedDayIndex] || plan.days[0];
 
+  const getMealFiber = (meal?: Meal) => {
+    if (!meal) return 0;
+    if (typeof meal.fiberGrams === 'number') return meal.fiberGrams;
+    return Math.round((meal.caloriesKcal || 300) * 0.02);
+  };
+
+  const getDayTotalFiber = (day: typeof currentDay) => {
+    if (typeof day.totalFiberGrams === 'number' && day.totalFiberGrams > 0) {
+      return day.totalFiberGrams;
+    }
+    return (
+      getMealFiber(day.breakfast) +
+      getMealFiber(day.lunch) +
+      getMealFiber(day.eveningSnack) +
+      getMealFiber(day.dinner)
+    );
+  };
+
+  const currentDayFiber = getDayTotalFiber(currentDay);
+
   const handleOpenSubstitution = (mealName: string, ingredient: string = '') => {
     setSubMealName(mealName);
     setSubIngredient(ingredient);
     setSubModalOpen(true);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const generate7DayText = (p: WeeklyMealPlan, style: 'whatsapp' | 'simple'): string => {
+    if (!p || !p.days) return '';
+
+    if (style === 'simple') {
+      let text = `7-DAY VEGETARIAN MEAL PLAN\n`;
+      text += `Plan: ${p.planTitle || 'Weekly Plan'}\n`;
+      text += `Daily Target: ${p.targetProteinGrams}g Protein | Est. Grocery: ₹${p.totalWeeklyCostInr}\n`;
+      text += `------------------------------------\n\n`;
+
+      p.days.forEach((day) => {
+        const fiber = getDayTotalFiber(day);
+        text += `[${(day.dayName || `Day ${day.dayNumber}`).toUpperCase()}] - ${day.totalCaloriesKcal} kcal, ${day.totalProteinGrams}g Protein, ${fiber}g Fiber\n`;
+        if (day.breakfast) text += ` - Breakfast: ${day.breakfast.name} (${day.breakfast.portion})\n`;
+        if (day.lunch) text += ` - Lunch: ${day.lunch.name} (${day.lunch.portion})\n`;
+        if (day.eveningSnack) text += ` - Snack: ${day.eveningSnack.name} (${day.eveningSnack.portion})\n`;
+        if (day.dinner) text += ` - Dinner: ${day.dinner.name} (${day.dinner.portion})\n`;
+        text += `\n`;
+      });
+      return text;
+    }
+
+    // Default: WhatsApp rich format
+    let text = `🥗 *NutriPlan AI - 7-DAY VEGETARIAN DIET PLAN*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `📌 *${p.planTitle || 'Weekly High-Protein Plan'}*\n`;
+    text += `💪 *Target Protein:* ${p.targetProteinGrams}g/day | 💰 *Weekly Grocery:* ₹${p.totalWeeklyCostInr}\n`;
+    text += `✅ *Compliance:* ICMR/NIN 2024 & WHO 0g Added Sugar\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    p.days.forEach((day) => {
+      const fiber = getDayTotalFiber(day);
+      text += `🗓️ *${(day.dayName || `Day ${day.dayNumber}`).toUpperCase()}* (Day ${day.dayNumber})\n`;
+      text += `📊 *Macros:* ${day.totalCaloriesKcal} kcal | ${day.totalProteinGrams}g Protein | ${fiber}g Fiber\n`;
+      text += `─────────────\n`;
+
+      const meals = [
+        { label: '🍳 *Breakfast*', meal: day.breakfast },
+        { label: '🍲 *Lunch*', meal: day.lunch },
+        { label: '☕ *Evening Snack*', meal: day.eveningSnack },
+        { label: '🌙 *Dinner*', meal: day.dinner },
+      ];
+
+      meals.forEach(({ label, meal }) => {
+        if (meal) {
+          const mFib = getMealFiber(meal);
+          text += `${label}: *${meal.name}*\n`;
+          text += `   • Portion: ${meal.portion}\n`;
+          text += `   • Nutrition: ${meal.caloriesKcal} kcal | ${meal.proteinGrams}g P | ${mFib}g Fiber\n`;
+          if (meal.ingredients && meal.ingredients.length > 0) {
+            text += `   • Ingredients: ${meal.ingredients.join(', ')}\n`;
+          }
+        }
+      });
+
+      text += `\n`;
+    });
+
+    text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    if (p.nutritionistNotes) {
+      text += `💡 *Dietitian Note:* ${p.nutritionistNotes}\n\n`;
+    }
+    text += `✨ Generated by *NutriPlan AI* - ICMR 2024 Dietitian Assistant`;
+    return text;
   };
 
-  const renderMealCard = (meal: Meal, label: string) => {
+  const handleTriggerPrint = (scope: 'all' | 'single') => {
+    setPrintScope(scope);
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  };
+
+  const handleCopy7DayText = () => {
+    if (!plan) return;
+    const text = generate7DayText(plan, textFormatStyle);
+    navigator.clipboard.writeText(text);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2500);
+  };
+
+  const handleShareWhatsAppPlan = () => {
+    if (!plan) return;
+    const text = generate7DayText(plan, textFormatStyle);
+    const encoded = encodeURIComponent(text);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+  };
+
+  const handleShuffleRecipe = async (slotLabel: string, currentMeal: Meal) => {
+    if (!plan) return;
+    setShufflingSlot(slotLabel);
+
+    try {
+      const newMeal = await apiFetch('/api/shuffle-recipe', {
+        method: 'POST',
+        body: JSON.stringify({
+          mealSlot: slotLabel,
+          currentMeal,
+          userProfile,
+          inventory,
+        }),
+      });
+
+      if (newMeal && newMeal.name) {
+        let slotKey: 'breakfast' | 'lunch' | 'eveningSnack' | 'dinner' = 'breakfast';
+        const norm = slotLabel.toLowerCase();
+        if (norm.includes('lunch')) slotKey = 'lunch';
+        else if (norm.includes('snack')) slotKey = 'eveningSnack';
+        else if (norm.includes('dinner')) slotKey = 'dinner';
+
+        const updatedDays = [...plan.days];
+        const targetDay = { ...updatedDays[selectedDayIndex] };
+        targetDay[slotKey] = newMeal;
+
+        const b = targetDay.breakfast;
+        const l = targetDay.lunch;
+        const s = targetDay.eveningSnack;
+        const d = targetDay.dinner;
+
+        targetDay.totalCaloriesKcal = (b?.caloriesKcal || 0) + (l?.caloriesKcal || 0) + (s?.caloriesKcal || 0) + (d?.caloriesKcal || 0);
+        targetDay.totalProteinGrams = (b?.proteinGrams || 0) + (l?.proteinGrams || 0) + (s?.proteinGrams || 0) + (d?.proteinGrams || 0);
+
+        const bFib = typeof b?.fiberGrams === 'number' ? b.fiberGrams : Math.round((b?.caloriesKcal || 0) * 0.02);
+        const lFib = typeof l?.fiberGrams === 'number' ? l.fiberGrams : Math.round((l?.caloriesKcal || 0) * 0.02);
+        const sFib = typeof s?.fiberGrams === 'number' ? s.fiberGrams : Math.round((s?.caloriesKcal || 0) * 0.02);
+        const dFib = typeof d?.fiberGrams === 'number' ? d.fiberGrams : Math.round((d?.caloriesKcal || 0) * 0.02);
+        targetDay.totalFiberGrams = bFib + lFib + sFib + dFib;
+
+        updatedDays[selectedDayIndex] = targetDay;
+
+        const updatedPlan: WeeklyMealPlan = {
+          ...plan,
+          days: updatedDays,
+        };
+
+        if (onUpdatePlan) {
+          onUpdatePlan(updatedPlan);
+        }
+
+        setShuffleToast(`Shuffled ${slotLabel} to "${newMeal.name}"!`);
+        setTimeout(() => setShuffleToast(null), 4000);
+      }
+    } catch (err: any) {
+      console.error('Failed to shuffle recipe:', err);
+      setShuffleToast('Failed to shuffle recipe. Please try again.');
+      setTimeout(() => setShuffleToast(null), 3000);
+    } finally {
+      setShufflingSlot(null);
+    }
+  };
+
+  const renderMealCard = (meal: Meal, label: string, cardIndex: number = 0) => {
     if (!meal) return null;
+    const mealFiber = getMealFiber(meal);
+    const isShufflingThis = shufflingSlot === label;
+    const isBookmarked = isMealBookmarked(meal);
+
     return (
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 hover:border-emerald-300 transition-all shadow-xs flex flex-col justify-between space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: cardIndex * 0.07, ease: [0.22, 1, 0.36, 1] }}
+        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+        className="bg-white border border-slate-200/80 rounded-2xl p-5 hover:border-emerald-400/80 hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden"
+      >
+        {/* Shuffling AI overlay */}
+        {isShufflingThis && (
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-xs rounded-2xl flex flex-col items-center justify-center space-y-2.5 z-20 transition-all p-4 text-center">
+            <div className="relative">
+              <div className="w-10 h-10 border-3 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+              <Sparkles className="w-4 h-4 text-emerald-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-slate-900 block">Gemini AI Shuffling Recipe...</span>
+              <span className="text-[11px] text-slate-500 block">Generating alternative {label.toLowerCase()} using pantry stock</span>
+            </div>
+          </div>
+        )}
+
         <div>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md">
-              {label}
-            </span>
+          {/* Header with Slot Label & Bookmark Action */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div className="flex items-center space-x-2">
-              <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full flex items-center space-x-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md group-hover:bg-emerald-100 transition-colors">
+                {label}
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => toggleBookmark(meal, label)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold border flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs ${
+                  isBookmarked
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-slate-50 text-slate-600 hover:bg-amber-50 hover:text-amber-700 border-slate-200'
+                }`}
+                title={isBookmarked ? 'Remove from Saved Favorites' : 'Bookmark recipe to Favorites'}
+              >
+                <BookmarkCheck className={`w-3.5 h-3.5 ${isBookmarked ? 'text-amber-600 fill-amber-500' : 'text-slate-400'}`} />
+                <span>{isBookmarked ? 'Saved' : 'Bookmark'}</span>
+              </motion.button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-600 bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
                 <Flame className="w-3 h-3 text-amber-500" />
                 <span>{meal.caloriesKcal} kcal</span>
               </span>
-              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center space-x-1">
+              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
                 <HeartPulse className="w-3 h-3 text-emerald-600" />
                 <span>{meal.proteinGrams}g Protein</span>
+              </span>
+              <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                <Wheat className="w-3 h-3 text-teal-600" />
+                <span>{mealFiber}g Fiber</span>
               </span>
             </div>
           </div>
 
-          <h3 className="text-base font-bold text-slate-900 mb-1">{meal.name}</h3>
+          <h3 className="text-base font-bold text-slate-900 mb-1 group-hover:text-emerald-950 transition-colors">{meal.name}</h3>
           <p className="text-xs text-slate-500 font-medium mb-3">
             Portion: <strong className="text-slate-700">{meal.portion}</strong>
           </p>
@@ -124,14 +432,16 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
             <span className="font-semibold text-slate-700 block text-[11px]">Key Ingredients:</span>
             <div className="flex flex-wrap gap-1">
               {(meal.ingredients || []).map((ing, i) => (
-                <span
+                <motion.span
                   key={i}
+                  whileHover={{ scale: 1.06, y: -1 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => handleOpenSubstitution(meal.name, ing)}
-                  className="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md text-[11px] hover:border-emerald-400 hover:text-emerald-700 cursor-pointer transition-colors"
-                  title="Click to substitute"
+                  className="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md text-[11px] hover:border-emerald-400 hover:text-emerald-700 cursor-pointer transition-colors shadow-2xs"
+                  title="Click to substitute ingredient"
                 >
                   {ing}
-                </span>
+                </motion.span>
               ))}
             </div>
           </div>
@@ -142,117 +452,518 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
           </p>
         </div>
 
-        {/* Swap button */}
-        <button
-          onClick={() => handleOpenSubstitution(meal.name)}
-          className="w-full text-xs font-semibold text-slate-600 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 py-2 rounded-xl border border-slate-200 hover:border-emerald-200 flex items-center justify-center space-x-1.5 transition-all"
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5" />
-          <span>Substitute / Swap Item</span>
-        </button>
-      </div>
+        {/* Action button row: Shuffle Recipe & Substitute Item */}
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            disabled={isShufflingThis}
+            onClick={() => handleShuffleRecipe(label, meal)}
+            className="text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 py-2.5 px-3 rounded-xl border border-emerald-200/80 hover:border-emerald-300 flex items-center justify-center space-x-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+            title="Ask Gemini to suggest an alternative dish for this slot using pantry stock"
+          >
+            {isShufflingThis ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                <span>Shuffling...</span>
+              </>
+            ) : (
+              <>
+                <Shuffle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Shuffle Recipe</span>
+              </>
+            )}
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => handleOpenSubstitution(meal.name)}
+            className="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 py-2.5 px-3 rounded-xl border border-slate-200/90 hover:border-slate-300 flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />
+            <span>Substitute</span>
+          </motion.button>
+        </div>
+      </motion.div>
     );
   };
 
   return (
     <div className="space-y-6">
-      {/* Plan Summary Bar */}
-      <div className="bg-gradient-to-r from-emerald-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-300 uppercase tracking-wider mb-1">
-              <Sparkles className="w-4 h-4" />
-              <span>7-Day Vegetarian Meal Plan</span>
+      {/* SCREEN VIEW (Hidden when printing) */}
+      <div className="space-y-6 print:hidden">
+        {/* Shuffle Toast Banner */}
+        <AnimatePresence>
+          {shuffleToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              className="bg-emerald-700 text-white px-4 py-3 rounded-xl shadow-sm flex items-center justify-between text-xs font-semibold"
+            >
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-emerald-200" />
+                <span>{shuffleToast}</span>
+              </div>
+              <button
+                onClick={() => setShuffleToast(null)}
+                className="text-emerald-200 hover:text-white text-xs font-medium ml-4 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Plan Summary Bar */}
+        <div className="bg-gradient-to-r from-emerald-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+            <div>
+              <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-300 uppercase tracking-wider mb-1">
+                <Sparkles className="w-4 h-4" />
+                <span>7-Day Vegetarian Meal Plan</span>
+              </div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">{plan.planTitle}</h1>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">{plan.summary}</p>
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{plan.planTitle}</h1>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">{plan.summary}</p>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="bg-white/10 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                <span className="block text-[10px] text-emerald-300 font-semibold uppercase">Daily Protein</span>
+                <span className="text-sm font-bold text-white">{plan.targetProteinGrams}g / day</span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                <span className="block text-[10px] text-emerald-300 font-semibold uppercase">Weekly Grocery</span>
+                <span className="text-sm font-bold text-white">₹{plan.totalWeeklyCostInr}</span>
+              </div>
+
+              {/* Action Buttons: Print All 7 Days & Export Text */}
+              <button
+                onClick={() => handleTriggerPrint('all')}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                title="Print full 7-day meal plan (Monday to Sunday)"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print All 7 Days</span>
+              </button>
+
+              <button
+                onClick={() => setExportModalOpen(true)}
+                className="bg-white text-slate-900 hover:bg-emerald-50 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center space-x-1.5 transition-colors shadow-xs cursor-pointer active:scale-95"
+                title="Copy formatted 7-day diet menu for WhatsApp or Notes"
+              >
+                <FileText className="w-4 h-4 text-emerald-700" />
+                <span>Export 7-Day Text</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-white/10 text-center">
-              <span className="block text-[10px] text-emerald-300 font-semibold uppercase">Daily Protein</span>
-              <span className="text-base font-bold text-white">{plan.targetProteinGrams}g / day</span>
+          {/* Allergen Warning Banner */}
+          {plan.allergenWarnings && plan.allergenWarnings.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-white/15 flex items-center space-x-2 text-xs text-amber-200">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong>Allergen Safety Status:</strong> {plan.allergenWarnings.join(' • ')}
+              </span>
             </div>
-            <div className="bg-white/10 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-white/10 text-center">
-              <span className="block text-[10px] text-emerald-300 font-semibold uppercase">Weekly Grocery</span>
-              <span className="text-base font-bold text-white">₹{plan.totalWeeklyCostInr}</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-xs px-3.5 py-2 rounded-xl border border-white/10 text-center">
-              <span className="block text-[10px] text-emerald-300 font-semibold uppercase">ICMR Score</span>
-              <span className="text-base font-bold text-emerald-300">{plan.icmrComplianceScore}/100</span>
-            </div>
-            <button
-              onClick={handlePrint}
-              className="bg-white text-slate-900 hover:bg-emerald-50 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center space-x-1.5 transition-colors shadow-xs"
-            >
-              <Printer className="w-4 h-4 text-emerald-700" />
-              <span>Print / Export</span>
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Allergen Warning Banner */}
-        {plan.allergenWarnings && plan.allergenWarnings.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-white/15 flex items-center space-x-2 text-xs text-amber-200">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>
-              <strong>Allergen Safety Status:</strong> {plan.allergenWarnings.join(' • ')}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Days Tab Bar */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-2 border-b border-slate-200">
-        {plan.days.map((day, index) => {
-          const isActive = index === selectedDayIndex;
-          return (
+        {/* Sub-Navigation Bar: 7-Day Planner | Saved Favorites | Plan History & JSON */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              key={index}
-              onClick={() => setSelectedDayIndex(index)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex flex-col items-center min-w-[100px] border ${
-                isActive
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+              onClick={() => setPlannerSubTab('weekly')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                plannerSubTab === 'weekly'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
               }`}
             >
-              <span>{day.dayName || `Day ${day.dayNumber}`}</span>
-              <span className={`text-[10px] font-normal ${isActive ? 'text-emerald-100' : 'text-slate-500'}`}>
-                {day.totalProteinGrams}g Protein • {day.totalCaloriesKcal} kcal
-              </span>
+              <Calendar className="w-4 h-4 text-emerald-400" />
+              <span>7-Day Meal Plan</span>
             </button>
-          );
-        })}
-      </div>
 
-      {/* Selected Day Breakdown Header */}
-      <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-100 p-4 rounded-xl">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-2xs">
-            {currentDay.dayNumber}
+            <button
+              onClick={() => setPlannerSubTab('favorites')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                plannerSubTab === 'favorites'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <BookmarkCheck className="w-4 h-4 text-amber-400" />
+              <span>Saved Favorites</span>
+              {favorites.length > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-extrabold ml-1">
+                  {favorites.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setHistoryList(loadMealPlanHistoryStorage());
+                setPlannerSubTab('history');
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                plannerSubTab === 'history'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <History className="w-4 h-4 text-sky-400" />
+              <span>Plan History & JSON Data</span>
+            </button>
           </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-900">{currentDay.dayName} Menu</h2>
-            <p className="text-xs text-slate-600">
-              Balanced vegetarian menu designed to hit <strong className="text-emerald-800">{currentDay.totalProteinGrams}g protein</strong> & <strong className="text-slate-800">{currentDay.totalCaloriesKcal} kcal</strong> with zero added sugar.
-            </p>
+
+          <div className="text-[11px] font-medium text-slate-500 hidden sm:block">
+            💾 State Auto-Saved in Cookies & LocalStorage
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center space-x-2 text-xs">
-          <span className="bg-white border border-emerald-200 text-emerald-800 px-3 py-1 rounded-full font-semibold">
-            ✓ 5+ Veg/Fruit Servings
-          </span>
+        {/* 1. WEEKLY MEAL PLAN TAB */}
+        {plannerSubTab === 'weekly' && (
+          <>
+            {/* Days Tab Bar */}
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2 border-b border-slate-200">
+          {plan.days.map((day, index) => {
+            const isActive = index === selectedDayIndex;
+            const fiberVal = getDayTotalFiber(day);
+            return (
+              <motion.button
+                key={index}
+                onClick={() => setSelectedDayIndex(index)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex flex-col items-center min-w-[120px] border ${
+                  isActive
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                <span>{day.dayName || `Day ${day.dayNumber}`}</span>
+                <span className={`text-[10px] font-normal mt-0.5 ${isActive ? 'text-emerald-100' : 'text-slate-500'}`}>
+                  {day.totalCaloriesKcal} kcal • {day.totalProteinGrams}g P • {fiberVal}g Fiber
+                </span>
+              </motion.button>
+            );
+          })}
         </div>
-      </div>
 
-      {/* Meal Grid (4 Meals) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {renderMealCard(currentDay.breakfast, 'Breakfast')}
-        {renderMealCard(currentDay.lunch, 'Lunch')}
-        {renderMealCard(currentDay.eveningSnack, 'Evening Snack')}
-        {renderMealCard(currentDay.dinner, 'Dinner')}
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={selectedDayIndex}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="space-y-6"
+        >
+          {/* Selected Day Breakdown Header */}
+          <div className="bg-emerald-50/70 border border-emerald-100/90 p-5 rounded-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow-2xs">
+                  {currentDay.dayNumber}
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">{currentDay.dayName} Menu & Nutrition</h2>
+                  <p className="text-xs text-slate-600">
+                    ICMR/WHO 2024 compliant daily target breakdown based on non-refrigerated pantry stock.
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden sm:flex items-center space-x-2 text-xs">
+                <span className="bg-white border border-emerald-200 text-emerald-800 px-3 py-1 rounded-full font-semibold flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>ICMR 2024 & WHO Approved</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Total Daily Nutritional Breakdown Cards (Calories, Protein, Fiber) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+              {/* Calories */}
+              <motion.div whileHover={{ y: -2 }} className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-2 transition-shadow hover:shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Flame className="w-4 h-4 text-amber-500" />
+                    <span>Total Calories</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-900">
+                    {currentDay.totalCaloriesKcal} / {plan.targetCaloriesKcal || userProfile.calorieTargetKcal} kcal
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (currentDay.totalCaloriesKcal / (plan.targetCaloriesKcal || userProfile.calorieTargetKcal || 1600)) * 100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 flex items-center justify-between">
+                  <span>Target: {plan.targetCaloriesKcal || userProfile.calorieTargetKcal} kcal</span>
+                  <span className="text-emerald-700 font-medium">✓ Caloric Balance</span>
+                </p>
+              </motion.div>
+
+              {/* Protein */}
+              <motion.div whileHover={{ y: -2 }} className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-2 transition-shadow hover:shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
+                    <HeartPulse className="w-4 h-4 text-emerald-600" />
+                    <span>Total Protein</span>
+                  </span>
+                  <span className="text-xs font-bold text-emerald-800">
+                    {currentDay.totalProteinGrams} / {plan.targetProteinGrams || userProfile.proteinTargetGrams} g
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (currentDay.totalProteinGrams / (plan.targetProteinGrams || userProfile.proteinTargetGrams || 80)) * 100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 flex items-center justify-between">
+                  <span>Goal: {plan.targetProteinGrams || userProfile.proteinTargetGrams}g</span>
+                  <span className="text-emerald-700 font-medium">✓ Sprouted & Soya Boost</span>
+                </p>
+              </motion.div>
+
+              {/* Fiber */}
+              <motion.div whileHover={{ y: -2 }} className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-2 transition-shadow hover:shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Wheat className="w-4 h-4 text-teal-600" />
+                    <span>Dietary Fiber</span>
+                  </span>
+                  <span className="text-xs font-bold text-teal-900">
+                    {currentDayFiber} g
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-teal-600 h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.round((currentDayFiber / 30) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 flex items-center justify-between">
+                  <span>ICMR Benchmark: ≥30g/day</span>
+                  <span className="text-teal-700 font-semibold">
+                    {currentDayFiber >= 30 ? '✓ Exceeds ICMR Goal' : '✓ High Fiber'}
+                  </span>
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Guideline Alignment Badges */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <div className="bg-white/80 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center space-x-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span><strong>WHO Limit:</strong> 0g Added Sugar Across All 4 Meals</span>
+              </div>
+              <div className="bg-white/80 border border-teal-200 text-teal-900 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center space-x-1.5">
+                <Wheat className="w-3.5 h-3.5 text-teal-600" />
+                <span><strong>ICMR Fiber Standard:</strong> {currentDayFiber}g Whole Pulse & Seed Fiber</span>
+              </div>
+              <div className="bg-white/80 border border-indigo-200 text-indigo-900 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center space-x-1.5">
+                <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                <span><strong>Macro Ratio:</strong> ~55% Complex Carbs, ~20% Protein, ~25% Healthy Fats</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Daily Water Intake Tracker */}
+          {(() => {
+            const dayNum = currentDay.dayNumber || (selectedDayIndex + 1);
+            const glassesConsumed = waterLogs[dayNum] || 0;
+            const targetGlasses = 8; // 2,000 ml
+            const currentMl = glassesConsumed * 250;
+            const targetMl = targetGlasses * 250;
+            const percentage = Math.min(100, Math.round((glassesConsumed / targetGlasses) * 100));
+            const isTargetMet = glassesConsumed >= targetGlasses;
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-sky-50/90 via-blue-50/70 to-cyan-50/90 border border-sky-200/80 rounded-2xl p-5 shadow-2xs space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-sky-500 text-white rounded-xl flex items-center justify-center shadow-xs">
+                      <Droplets className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-bold text-slate-900">Daily Hydration Tracker</h3>
+                        {isTargetMet && (
+                          <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-2xs">
+                            <Check className="w-3 h-3" />
+                            <span>2.0L Goal Met!</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {currentDay.dayName || `Day ${dayNum}`} Water Log • 1 glass = 250 ml
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Water Counter & Percentage Badge */}
+                  <div className="flex items-center space-x-2 bg-white/90 border border-sky-200 px-3.5 py-1.5 rounded-xl shadow-2xs">
+                    <Droplet className="w-4 h-4 text-sky-500 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-800">
+                      {glassesConsumed} / {targetGlasses} Glasses
+                    </span>
+                    <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md">
+                      {currentMl} / {targetMl} ml ({percentage}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hydration Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="w-full bg-sky-200/60 h-2.5 rounded-full overflow-hidden p-0.5">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${percentage}%` }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        isTargetMet
+                          ? 'bg-gradient-to-r from-emerald-500 to-sky-500'
+                          : 'bg-gradient-to-r from-sky-400 to-blue-600'
+                      }`}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <span>Target: 2,000 ml (8 Glasses)</span>
+                    <span className={isTargetMet ? 'font-bold text-emerald-700' : 'text-slate-500'}>
+                      {isTargetMet ? '🎉 Daily Hydration Target Reached!' : `${targetGlasses - glassesConsumed > 0 ? targetGlasses - glassesConsumed : 0} glasses remaining`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Glasses Clickable Grid (8 Interactive Glasses) */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 block">
+                    Click glasses to log or toggle water intake:
+                  </span>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                    {Array.from({ length: 8 }).map((_, idx) => {
+                      const glassNum = idx + 1;
+                      const isFilled = glassesConsumed >= glassNum;
+
+                      return (
+                        <motion.button
+                          key={idx}
+                          whileHover={{ scale: 1.08, y: -2 }}
+                          whileTap={{ scale: 0.92 }}
+                          onClick={() => {
+                            if (glassesConsumed === glassNum) {
+                              updateWaterIntake(dayNum, glassNum - 1);
+                            } else {
+                              updateWaterIntake(dayNum, glassNum);
+                            }
+                          }}
+                          className={`py-2 px-1 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                            isFilled
+                              ? 'bg-sky-500 text-white border-sky-600 shadow-2xs'
+                              : 'bg-white text-sky-600 border-sky-200 hover:border-sky-400 hover:bg-sky-50'
+                          }`}
+                          title={`Glass ${glassNum} (250ml) - Click to ${isFilled ? 'remove' : 'fill'}`}
+                        >
+                          <Droplet className={`w-4 h-4 ${isFilled ? 'fill-white text-white' : 'text-sky-400'}`} />
+                          <span className="text-[10px] font-bold">
+                            {glassNum * 250}ml
+                          </span>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Quick Increment/Decrement Controls & Reset */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-sky-200/60">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => updateWaterIntake(dayNum, glassesConsumed - 1)}
+                      disabled={glassesConsumed === 0}
+                      className="bg-white hover:bg-sky-50 border border-sky-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed p-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
+                      title="Remove 1 glass (250ml)"
+                    >
+                      <Minus className="w-3.5 h-3.5 text-sky-600" />
+                      <span>1 Glass</span>
+                    </button>
+
+                    <button
+                      onClick={() => updateWaterIntake(dayNum, glassesConsumed + 1)}
+                      className="bg-sky-600 hover:bg-sky-700 text-white p-1.5 px-3 rounded-lg text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs active:scale-95"
+                      title="Add 1 glass (250ml)"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-sky-100" />
+                      <span>+1 Glass (+250ml)</span>
+                    </button>
+
+                    <button
+                      onClick={() => updateWaterIntake(dayNum, glassesConsumed + 2)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 px-3 rounded-lg text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs active:scale-95"
+                      title="Add 2 glasses (500ml)"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-blue-100" />
+                      <span>+2 Glasses (+500ml)</span>
+                    </button>
+                  </div>
+
+                  {glassesConsumed > 0 && (
+                    <button
+                      onClick={() => updateWaterIntake(dayNum, 0)}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center space-x-1 px-2 py-1 hover:bg-sky-100/50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3 text-slate-400" />
+                      <span>Reset Day</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Health & Clinical Guidance Note */}
+                <div className="bg-white/80 border border-sky-200/70 p-2.5 rounded-xl text-[11px] text-slate-600 flex items-start space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>ICMR & WHO Hydration Guideline:</strong> Maintaining 2.0L–2.5L daily water intake optimizes high-protein legume digestion, enhances fiber motility, and helps prevent bloating during vegetarian diet plans.
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })()}
+
+          {/* Meal Grid (4 Meals with staggered animation indices) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {renderMealCard(currentDay.breakfast, 'Breakfast', 0)}
+            {renderMealCard(currentDay.lunch, 'Lunch', 1)}
+            {renderMealCard(currentDay.eveningSnack, 'Evening Snack', 2)}
+            {renderMealCard(currentDay.dinner, 'Dinner', 3)}
+          </div>
+        </motion.div>
+      </AnimatePresence>
 
       {/* Nutritionist Guidance Notes */}
       {plan.nutritionistNotes && (
@@ -264,6 +975,349 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
           <p className="text-xs text-slate-300 leading-relaxed">{plan.nutritionistNotes}</p>
         </div>
       )}
+      </>
+      )}
+
+      {/* 2. SAVED FAVORITES TAB */}
+      {plannerSubTab === 'favorites' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                  <BookmarkCheck className="w-5 h-5 text-amber-600" />
+                  <span>Bookmarked Favorite Recipes</span>
+                </h2>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Your saved favorite dishes for quick access, meal swaps, and cooking references.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-amber-900 bg-amber-200/70 border border-amber-300 px-3 py-1 rounded-full self-start sm:self-auto">
+                {favorites.length} Saved {favorites.length === 1 ? 'Recipe' : 'Recipes'}
+              </span>
+            </div>
+
+            {/* Search & Category Filter */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-amber-200/60">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={favoriteSearch}
+                  onChange={(e) => setFavoriteSearch(e.target.value)}
+                  placeholder="Search saved recipes or ingredients..."
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-amber-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                {['all', 'Breakfast', 'Lunch', 'Evening Snack', 'Dinner'].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setFavoriteCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                      favoriteCategory === cat
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'bg-white text-slate-700 hover:bg-amber-100/70 border border-amber-200'
+                    }`}
+                  >
+                    {cat === 'all' ? 'All Slots' : cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Favorites Cards Grid */}
+          {(() => {
+            const filteredFavs = favorites.filter((fav) => {
+              const matchesCat = favoriteCategory === 'all' || fav.mealSlot === favoriteCategory || fav.type === favoriteCategory;
+              const query = favoriteSearch.toLowerCase();
+              const matchesSearch =
+                !query ||
+                fav.name.toLowerCase().includes(query) ||
+                (fav.ingredients || []).some((ing) => ing.toLowerCase().includes(query)) ||
+                (fav.preparationNotes || '').toLowerCase().includes(query);
+              return matchesCat && matchesSearch;
+            });
+
+            if (filteredFavs.length === 0) {
+              return (
+                <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3">
+                  <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+                    <Bookmark className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    {favorites.length === 0 ? 'No Favorite Recipes Saved Yet' : 'No Recipes Found Matching Search'}
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {favorites.length === 0
+                      ? 'Click the "Bookmark" button on any meal card in your 7-day plan to save recipes here for fast access!'
+                      : 'Try adjusting your search query or selecting a different meal slot filter.'}
+                  </p>
+                  {favorites.length === 0 && (
+                    <button
+                      onClick={() => setPlannerSubTab('weekly')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span>Browse 7-Day Meal Plan</span>
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredFavs.map((fav, idx) => (
+                  <motion.div
+                    key={fav.id || idx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    className="bg-white border border-amber-200/80 rounded-2xl p-5 hover:shadow-md transition-all space-y-4 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md">
+                          {fav.mealSlot || fav.type}
+                        </span>
+                        <button
+                          onClick={() => toggleBookmark(fav, fav.mealSlot || 'Meal')}
+                          className="text-amber-600 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Remove from Saved Favorites"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <h3 className="text-base font-bold text-slate-900 mb-1">{fav.name}</h3>
+                      <p className="text-xs text-slate-500 font-medium mb-3">
+                        Portion: <strong className="text-slate-700">{fav.portion}</strong>
+                      </p>
+
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        <span className="text-[11px] font-semibold text-slate-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <Flame className="w-3 h-3 text-amber-500" />
+                          <span>{fav.caloriesKcal} kcal</span>
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <HeartPulse className="w-3 h-3 text-emerald-600" />
+                          <span>{fav.proteinGrams}g Protein</span>
+                        </span>
+                      </div>
+
+                      {/* Ingredients */}
+                      <div className="text-xs text-slate-600 space-y-1 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <span className="font-semibold text-slate-700 block text-[11px]">Ingredients:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {(fav.ingredients || []).map((ing, i) => (
+                            <span key={i} className="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md text-[11px]">
+                              {ing}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Preparation Notes */}
+                      <p className="text-xs text-slate-600 italic bg-amber-50/40 p-2.5 rounded-xl border border-amber-100/60 leading-relaxed">
+                        "{fav.preparationNotes}"
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Saved: {fav.bookmarkedAt || 'Recently'}</span>
+                      <button
+                        onClick={() => handleOpenSubstitution(fav.name)}
+                        className="text-emerald-700 font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
+                      >
+                        <ArrowRightLeft className="w-3 h-3" />
+                        <span>Substitute</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()}
+        </motion.div>
+      )}
+
+      {/* 3. PLAN HISTORY & JSON DATA TAB */}
+      {plannerSubTab === 'history' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="bg-slate-900 text-white rounded-2xl p-5 space-y-4 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                  <Code className="w-5 h-5 text-sky-400" />
+                  <span>JSON Data & Meal Plan History</span>
+                </h2>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Inspect structured JSON format for user profile, meal plan, grocery details, and restore past generated plans.
+                </p>
+              </div>
+
+              {/* Sub-tabs for JSON types */}
+              <div className="flex items-center space-x-1 bg-slate-800 p-1 rounded-xl border border-slate-700 overflow-x-auto">
+                <button
+                  onClick={() => setJsonViewTab('meal_plan')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                    jsonViewTab === 'meal_plan' ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Meal Plan JSON
+                </button>
+                <button
+                  onClick={() => setJsonViewTab('profile')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                    jsonViewTab === 'profile' ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Profile JSON
+                </button>
+                <button
+                  onClick={() => setJsonViewTab('pantry')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                    jsonViewTab === 'pantry' ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Pantry JSON
+                </button>
+                <button
+                  onClick={() => setJsonViewTab('history')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                    jsonViewTab === 'history' ? 'bg-sky-500 text-white shadow-2xs' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Saved History ({historyList.length})
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {jsonViewTab !== 'history' ? (
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3 font-mono text-xs text-sky-300 overflow-hidden">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-slate-400">
+                <span className="font-sans text-xs font-semibold text-slate-200">
+                  {jsonViewTab === 'meal_plan' && 'Weekly Meal Plan JSON'}
+                  {jsonViewTab === 'profile' && 'User Profile & Guidelines JSON'}
+                  {jsonViewTab === 'pantry' && 'Grocery Inventory & Pantry JSON'}
+                </span>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      const dataToCopy =
+                        jsonViewTab === 'meal_plan'
+                          ? plan
+                          : jsonViewTab === 'profile'
+                          ? userProfile
+                          : inventory;
+                      navigator.clipboard.writeText(JSON.stringify(dataToCopy, null, 2));
+                      setCopiedJson(true);
+                      setTimeout(() => setCopiedJson(false), 2000);
+                    }}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg font-sans text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+                  >
+                    {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-sky-400" />}
+                    <span>{copiedJson ? 'Copied!' : 'Copy JSON'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const dataToDownload =
+                        jsonViewTab === 'meal_plan'
+                          ? plan
+                          : jsonViewTab === 'profile'
+                          ? userProfile
+                          : inventory;
+                      const blob = new Blob([JSON.stringify(dataToDownload, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `nutriplan_${jsonViewTab}_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-lg font-sans text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download JSON</span>
+                  </button>
+                </div>
+              </div>
+
+              <pre className="max-h-[500px] overflow-auto p-3 bg-slate-900 rounded-xl text-[11px] leading-relaxed text-sky-300">
+                {JSON.stringify(
+                  jsonViewTab === 'meal_plan' ? plan : jsonViewTab === 'profile' ? userProfile : inventory,
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+                <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                  <History className="w-5 h-5 text-sky-600" />
+                  <span>Saved Meal Plan History</span>
+                </h3>
+
+                {historyList.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-4">No previous meal plans recorded in history.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {historyList.map((hist, idx) => (
+                      <div
+                        key={hist.id || idx}
+                        className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-sky-50/50 transition-colors"
+                      >
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">
+                            {hist.plan?.planTitle || `Meal Plan ${idx + 1}`}
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            Generated on: {new Date(hist.generatedAt).toLocaleString('en-IN')} • {hist.targetProteinGrams}g Protein/day • ₹{hist.totalWeeklyCostInr} Grocery
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {onUpdatePlan && (
+                            <button
+                              onClick={() => {
+                                if (hist.plan) {
+                                  onUpdatePlan(hist.plan);
+                                  setPlannerSubTab('weekly');
+                                  setShuffleToast(`Restored Meal Plan from ${new Date(hist.generatedAt).toLocaleDateString()}!`);
+                                  setTimeout(() => setShuffleToast(null), 3000);
+                                }
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore This Plan</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* Customize / Regenerate Bar */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3">
@@ -272,7 +1326,7 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
           <span>Regenerate or Fine-Tune Plan</span>
         </h3>
         <p className="text-xs text-slate-500">
-          Want changes? Add specific constraints (e.g. "Include more sprouted moong for breakfast", "No dairy for dinner", "Increase budget to ₹200").
+          Want changes? Add specific constraints (e.g. "Increase fiber to 45g", "Include more sprouted moong for breakfast", "No dairy for dinner").
         </p>
         <div className="flex space-x-2">
           <input
@@ -291,6 +1345,102 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
           </button>
         </div>
       </div>
+      </div> {/* END OF print:hidden SCREEN VIEW */}
+
+      {/* Export 7-Day Text Modal */}
+      <AnimatePresence>
+        {exportModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5 my-8"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Export 7-Day Meal Plan</h3>
+                    <p className="text-xs text-slate-500">Full Monday–Sunday Diet Schedule for WhatsApp or Notes</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExportModalOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Format Style Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">Select Text Format:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setTextFormatStyle('whatsapp')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      textFormatStyle === 'whatsapp'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    💬 WhatsApp / Rich Format
+                  </button>
+                  <button
+                    onClick={() => setTextFormatStyle('simple')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      textFormatStyle === 'simple'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    📝 Plain Text Format
+                  </button>
+                </div>
+              </div>
+
+              {/* Text Area Preview */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Formatted Text Preview</span>
+                  <span>{generate7DayText(plan, textFormatStyle).length} characters</span>
+                </div>
+                <textarea
+                  readOnly
+                  value={generate7DayText(plan, textFormatStyle)}
+                  rows={10}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-mono text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 leading-relaxed resize-none selection:bg-emerald-200"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    onClick={handleCopy7DayText}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all shadow-xs cursor-pointer active:scale-98"
+                  >
+                    {copiedText ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedText ? 'Copied 7-Day Plan!' : 'Copy Entire 7-Day Text'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleShareWhatsAppPlan}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all shadow-xs cursor-pointer active:scale-98"
+                  >
+                    <MessageSquare className="w-4 h-4 text-green-200" />
+                    <span>Send via WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Substitution Modal */}
       <SubstitutionModal
@@ -301,6 +1451,68 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
         inventory={inventory}
         userProfile={userProfile}
       />
+
+      {/* PRINT-ONLY VIEW (Hidden on screen, rendered on print) */}
+      <div className="hidden print:block space-y-6 text-black p-4 bg-white">
+        {/* Printable Header */}
+        <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">NutriPlan AI — 7-Day High-Protein Diet Plan</h1>
+            <p className="text-sm font-semibold text-emerald-800">{plan.planTitle}</p>
+            <p className="text-xs text-slate-700 mt-1 max-w-xl">{plan.summary}</p>
+          </div>
+          <div className="text-right text-xs space-y-0.5">
+            <p className="font-bold text-slate-900">Daily Target: {plan.targetProteinGrams}g Protein</p>
+            <p className="text-slate-700">Weekly Grocery: ₹{plan.totalWeeklyCostInr}</p>
+            <p className="text-emerald-800 font-bold">ICMR 2024 & WHO Approved</p>
+          </div>
+        </div>
+
+        {/* 7 Days Printable Loop */}
+        <div className="space-y-6">
+          {(printScope === 'all' ? plan.days : [currentDay]).map((day, dIdx) => (
+            <div key={dIdx} className="border border-slate-300 rounded-xl p-4 break-inside-avoid space-y-3 bg-white">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                <h2 className="text-base font-bold text-slate-900">
+                  {(day.dayName || `Day ${day.dayNumber}`).toUpperCase()} (Day {day.dayNumber})
+                </h2>
+                <span className="text-xs font-semibold text-slate-700">
+                  Total: {day.totalCaloriesKcal} kcal • {day.totalProteinGrams}g Protein • {getDayTotalFiber(day)}g Fiber • 💧 Water Goal: {(waterLogs[day.dayNumber] || 0) * 250}ml / 2000ml
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {[
+                  { label: 'Breakfast', meal: day.breakfast },
+                  { label: 'Lunch', meal: day.lunch },
+                  { label: 'Evening Snack', meal: day.eveningSnack },
+                  { label: 'Dinner', meal: day.dinner },
+                ].map(({ label, meal }, mIdx) => (
+                  <div key={mIdx} className="border border-slate-200 rounded-lg p-2.5 space-y-1 bg-slate-50">
+                    <div className="flex justify-between font-bold text-slate-900">
+                      <span>{label}: {meal?.name || 'N/A'}</span>
+                      <span className="text-slate-700">{meal?.caloriesKcal} kcal | {meal?.proteinGrams}g P</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">Portion: {meal?.portion}</p>
+                    {meal?.ingredients && meal.ingredients.length > 0 && (
+                      <p className="text-[10px] text-slate-500">
+                        Ingredients: {meal.ingredients.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {plan.nutritionistNotes && (
+          <div className="border-t border-slate-300 pt-3 text-xs text-slate-800 break-inside-avoid">
+            <strong>Dietitian & ICMR Clinical Notes:</strong> {plan.nutritionistNotes}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
+

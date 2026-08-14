@@ -1,14 +1,17 @@
-export function generateFallbackMealPlan(userProfile: any, inventory: any) {
+import { Meal, DayPlan, WeeklyMealPlan } from '../types';
+
+export function generateFallbackMealPlan(userProfile: any, inventory: any): WeeklyMealPlan {
   const targetProtein = userProfile?.proteinTargetGrams || 80;
   const targetCalories = userProfile?.calorieTargetKcal || 1600;
   const budget = userProfile?.dailyBudgetInr || 175;
 
-  const dayTemplates = [
+  const dayTemplates: DayPlan[] = [
     {
       dayNumber: 1,
       dayName: "Monday",
       totalProteinGrams: targetProtein,
       totalCaloriesKcal: targetCalories,
+      totalFiberGrams: 38,
       breakfast: {
         id: "d1-b",
         name: "Unsweetened Muesli with Warm Milk & Chia Seeds",
@@ -16,6 +19,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 Bowl (40g muesli + 200ml milk + 1 tsp chia)",
         caloriesKcal: 320,
         proteinGrams: 14,
+        fiberGrams: 8,
         ingredients: ["Unsweetened Muesli", "Milk", "Chia Seeds"],
         preparationNotes: "Mix warm milk with muesli and soaked chia seeds. Do not add sugar.",
         isZeroAddedSugar: true,
@@ -28,6 +32,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups cooked dal + 1 cup rice + 1 tomato sliced",
         caloriesKcal: 520,
         proteinGrams: 22,
+        fiberGrams: 10,
         ingredients: ["Toor Dal", "Rice", "Tomatoes", "Onions"],
         preparationNotes: "Pressure cook toor dal with turmeric and cumin. Serve hot with steamed rice.",
         isZeroAddedSugar: true,
@@ -40,6 +45,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 cup sprouted moong + 8 almonds",
         caloriesKcal: 210,
         proteinGrams: 16,
+        fiberGrams: 9,
         ingredients: ["Sprouted Moong", "Almonds", "Onion", "Lemon"],
         preparationNotes: "Toss sprouted moong with chopped onions, lemon juice, and roasted almonds.",
         isZeroAddedSugar: true,
@@ -52,6 +58,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups soya chunk curry + 2 chapatis",
         caloriesKcal: 550,
         proteinGrams: 32,
+        fiberGrams: 11,
         ingredients: ["Soya Chunks", "Atta", "Onions", "Tomatoes"],
         preparationNotes: "Boil soya chunks, squeeze water, and cook in onion-tomato gravy.",
         isZeroAddedSugar: true,
@@ -63,6 +70,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Tuesday",
       totalProteinGrams: targetProtein + 2,
       totalCaloriesKcal: targetCalories,
+      totalFiberGrams: 36,
       breakfast: {
         id: "d2-b",
         name: "High-Protein Besan & Spinach Chilla with Dahi",
@@ -70,6 +78,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "2 Chillas + 100g fresh curd",
         caloriesKcal: 340,
         proteinGrams: 18,
+        fiberGrams: 7,
         ingredients: ["Besan", "Curd", "Onions", "Spices"],
         preparationNotes: "Make a thin batter of besan, spices, and onions. Cook on tawa with minimal oil.",
         isZeroAddedSugar: true,
@@ -82,6 +91,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups khichdi + 30g bhuna chana + 1 cucumber",
         caloriesKcal: 480,
         proteinGrams: 24,
+        fiberGrams: 11,
         ingredients: ["Moong Dal", "Rice", "Roasted Chana", "Cucumber"],
         preparationNotes: "Cook equal parts moong dal and rice with turmeric and ghee. Serve with fresh cucumber.",
         isZeroAddedSugar: true,
@@ -94,6 +104,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 Guava + 30g peanuts",
         caloriesKcal: 200,
         proteinGrams: 10,
+        fiberGrams: 8,
         ingredients: ["Guava", "Peanuts"],
         preparationNotes: "Enjoy fresh guava slices alongside dry roasted peanuts.",
         isZeroAddedSugar: true,
@@ -106,6 +117,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 cup Paneer/Soya bhurji + 2 whole wheat rotis",
         caloriesKcal: 560,
         proteinGrams: 30,
+        fiberGrams: 10,
         ingredients: ["Soya Chunks", "Atta", "Onions", "Tomatoes"],
         preparationNotes: "Sauté minced soya/paneer with onions and tomatoes until fragrant.",
         isZeroAddedSugar: true,
@@ -117,6 +129,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Wednesday",
       totalProteinGrams: targetProtein,
       totalCaloriesKcal: targetCalories - 20,
+      totalFiberGrams: 39,
       breakfast: {
         id: "d3-b",
         name: "Oat & Chia Porridge with Sliced Banana",
@@ -124,6 +137,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 Bowl (40g oats + 1 tbsp chia + 1 banana)",
         caloriesKcal: 310,
         proteinGrams: 12,
+        fiberGrams: 9,
         ingredients: ["Unsweetened Muesli", "Chia Seeds", "Bananas", "Milk"],
         preparationNotes: "Cook oats/muesli in milk, top with chia seeds and fresh banana slices.",
         isZeroAddedSugar: true,
@@ -136,6 +150,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups chana curry + 1 cup rice",
         caloriesKcal: 510,
         proteinGrams: 24,
+        fiberGrams: 13,
         ingredients: ["Sprouted Moong/Chana", "Rice", "Tomatoes"],
         preparationNotes: "Simmer sprouted kala chana in spicy tomato-onion curry.",
         isZeroAddedSugar: true,
@@ -148,6 +163,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "50g bhuna chana + chaat masala",
         caloriesKcal: 180,
         proteinGrams: 12,
+        fiberGrams: 7,
         ingredients: ["Roasted Chana", "Lemon"],
         preparationNotes: "Toss crunchy roasted chana with lemon juice and chaat masala.",
         isZeroAddedSugar: true,
@@ -160,6 +176,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups mix dal + 2 rotis",
         caloriesKcal: 540,
         proteinGrams: 28,
+        fiberGrams: 10,
         ingredients: ["Toor Dal", "Moong Dal", "Atta"],
         preparationNotes: "Combine yellow moong and toor dal, temper with cumin and garlic.",
         isZeroAddedSugar: true,
@@ -171,6 +188,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Thursday",
       totalProteinGrams: targetProtein + 4,
       totalCaloriesKcal: targetCalories + 10,
+      totalFiberGrams: 37,
       breakfast: {
         id: "d4-b",
         name: "Moong Dal Sprouts Dosa / Cheela with Mint Chutney",
@@ -178,6 +196,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "2 Cheelas + mint yogurt chutney",
         caloriesKcal: 330,
         proteinGrams: 17,
+        fiberGrams: 8,
         ingredients: ["Moong Dal", "Curd", "Green Chillies"],
         preparationNotes: "Grind soaked moong dal into batter and make crisp cheelas.",
         isZeroAddedSugar: true,
@@ -190,6 +209,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "2 cups soya pulao + 100g raita",
         caloriesKcal: 530,
         proteinGrams: 28,
+        fiberGrams: 10,
         ingredients: ["Soya Chunks", "Rice", "Curd", "Cucumber"],
         preparationNotes: "Cook rice with soya chunks and spices; serve with cool cucumber raita.",
         isZeroAddedSugar: true,
@@ -202,6 +222,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 tbsp flax + 1 tbsp chia + 10 almonds",
         caloriesKcal: 190,
         proteinGrams: 9,
+        fiberGrams: 8,
         ingredients: ["Flax Seeds", "Chia Seeds", "Almonds"],
         preparationNotes: "Lightly dry roast the seed mix and almonds for a crunchy bite.",
         isZeroAddedSugar: true,
@@ -214,6 +235,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups dal fry + 2 phulkas + salad",
         caloriesKcal: 520,
         proteinGrams: 24,
+        fiberGrams: 11,
         ingredients: ["Toor Dal", "Atta", "Carrots", "Onions"],
         preparationNotes: "Cook thick toor dal with mustard seed tadka.",
         isZeroAddedSugar: true,
@@ -225,6 +247,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Friday",
       totalProteinGrams: targetProtein,
       totalCaloriesKcal: targetCalories,
+      totalFiberGrams: 35,
       breakfast: {
         id: "d5-b",
         name: "Soya Chunks Stir-Fry Bhurji with Toast / Chapati",
@@ -232,6 +255,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 cup soya bhurji + 1 chapati",
         caloriesKcal: 350,
         proteinGrams: 25,
+        fiberGrams: 8,
         ingredients: ["Soya Chunks", "Atta", "Onions"],
         preparationNotes: "Sauté rehydrated soya granules with onion and green peppers.",
         isZeroAddedSugar: true,
@@ -244,6 +268,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups dal + 1 cup rice + fruit",
         caloriesKcal: 500,
         proteinGrams: 22,
+        fiberGrams: 12,
         ingredients: ["Toor Dal", "Moong Dal", "Rice", "Guava"],
         preparationNotes: "Blend 2-3 types of dals for a complete amino acid profile.",
         isZeroAddedSugar: true,
@@ -256,6 +281,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "40g chana + 1 tsp seeds",
         caloriesKcal: 170,
         proteinGrams: 11,
+        fiberGrams: 6,
         ingredients: ["Roasted Chana", "Flax Seeds"],
         preparationNotes: "Mix roasted gram with toasted flax seeds.",
         isZeroAddedSugar: true,
@@ -268,6 +294,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups kadhi + 1 cup rice",
         caloriesKcal: 510,
         proteinGrams: 20,
+        fiberGrams: 9,
         ingredients: ["Besan", "Curd", "Rice"],
         preparationNotes: "Whisk curd and besan with turmeric and cook gently until thick.",
         isZeroAddedSugar: true,
@@ -279,6 +306,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Saturday",
       totalProteinGrams: targetProtein + 2,
       totalCaloriesKcal: targetCalories + 20,
+      totalFiberGrams: 40,
       breakfast: {
         id: "d6-b",
         name: "Warm Milk with Muesli, Almonds & Sliced Guava",
@@ -286,6 +314,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 Bowl muesli + 8 almonds + 1 guava",
         caloriesKcal: 330,
         proteinGrams: 15,
+        fiberGrams: 10,
         ingredients: ["Unsweetened Muesli", "Milk", "Almonds", "Guava"],
         preparationNotes: "Combine unsweetened grain cereal with cold or warm milk.",
         isZeroAddedSugar: true,
@@ -298,6 +327,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups sprout salad + 2 rotis",
         caloriesKcal: 490,
         proteinGrams: 24,
+        fiberGrams: 12,
         ingredients: ["Sprouted Moong", "Tomatoes", "Atta"],
         preparationNotes: "Steam sprouts for 3 minutes, toss with herbs and serve with soft rotis.",
         isZeroAddedSugar: true,
@@ -310,6 +340,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "150g fresh plain curd + roasted jeera",
         caloriesKcal: 140,
         proteinGrams: 8,
+        fiberGrams: 2,
         ingredients: ["Curd"],
         preparationNotes: "Whisk chilled curd with black salt and roasted cumin powder.",
         isZeroAddedSugar: true,
@@ -322,6 +353,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups gravy + 1 cup rice + cucumber",
         caloriesKcal: 550,
         proteinGrams: 31,
+        fiberGrams: 16,
         ingredients: ["Soya Chunks", "Rice", "Cucumber", "Onions"],
         preparationNotes: "Rich tomato-onion base gravy with high protein soya chunks.",
         isZeroAddedSugar: true,
@@ -333,6 +365,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
       dayName: "Sunday",
       totalProteinGrams: targetProtein,
       totalCaloriesKcal: targetCalories,
+      totalFiberGrams: 36,
       breakfast: {
         id: "d7-b",
         name: "Besan-Oat Vegetable Pancakes with Curd Dip",
@@ -340,6 +373,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "2 Pancakes + 2 tbsp curd",
         caloriesKcal: 340,
         proteinGrams: 16,
+        fiberGrams: 8,
         ingredients: ["Besan", "Curd", "Onions"],
         preparationNotes: "Mix besan, chopped veggies, and herbs into a savory pancake batter.",
         isZeroAddedSugar: true,
@@ -352,6 +386,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1.5 cups curry + 1 cup rice + salad",
         caloriesKcal: 540,
         proteinGrams: 25,
+        fiberGrams: 12,
         ingredients: ["Sprouted Moong/Chana", "Rice", "Tomatoes", "Onions"],
         preparationNotes: "Slow cooked brown chana/rajma in garlic tomato broth.",
         isZeroAddedSugar: true,
@@ -364,6 +399,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "1 Glass (1 banana + 200ml milk + 1 tsp chia)",
         caloriesKcal: 220,
         proteinGrams: 9,
+        fiberGrams: 6,
         ingredients: ["Bananas", "Milk", "Chia Seeds"],
         preparationNotes: "Blend banana with chilled milk and soaked chia seeds. No sugar added.",
         isZeroAddedSugar: true,
@@ -376,6 +412,7 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
         portion: "2 cups dal soup + 2 rotis",
         caloriesKcal: 480,
         proteinGrams: 22,
+        fiberGrams: 10,
         ingredients: ["Moong Dal", "Atta"],
         preparationNotes: "Soothing yellow moong soup tempered with ghee and ginger.",
         isZeroAddedSugar: true,
@@ -405,4 +442,189 @@ export function generateFallbackMealPlan(userProfile: any, inventory: any) {
     ],
     days: dayTemplates
   };
+}
+
+export function getFallbackShuffleMeal(slot: string, currentMealName: string = ''): Meal {
+  const normSlot = (slot || '').toLowerCase();
+  const timestamp = Date.now();
+
+  const breakfastOptions: Meal[] = [
+    {
+      id: `shuffled-b1-${timestamp}`,
+      name: "Moong Dal & Spinach Steamed Dhokla",
+      type: "Breakfast",
+      portion: "4 Pieces + 2 tbsp mint yogurt chutney",
+      caloriesKcal: 320,
+      proteinGrams: 16,
+      fiberGrams: 7,
+      ingredients: ["Moong Dal", "Curd", "Spinach", "Green Chillies"],
+      preparationNotes: "Grind soaked moong dal with curd and spinach, ferment briefly and steam into soft dhoklas.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-b2-${timestamp}`,
+      name: "Soya Granule & Paneer Bhurji Chapati Roll",
+      type: "Breakfast",
+      portion: "1 Whole Wheat Wrap + 100g Paneer/Soya Bhurji",
+      caloriesKcal: 360,
+      proteinGrams: 22,
+      fiberGrams: 8,
+      ingredients: ["Soya Chunks", "Atta", "Onions", "Tomatoes"],
+      preparationNotes: "Sauté rehydrated soya granules with onions and tomatoes, roll inside a warm roti.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-b3-${timestamp}`,
+      name: "High-Protein Oats & Besan Savory Cheela",
+      type: "Breakfast",
+      portion: "2 Medium Cheelas + 2 tbsp curd",
+      caloriesKcal: 330,
+      proteinGrams: 17,
+      fiberGrams: 8,
+      ingredients: ["Besan", "Unsweetened Muesli", "Curd", "Onions"],
+      preparationNotes: "Blend oats and besan into a pancake batter with green peppers and cook on tawa.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+  ];
+
+  const lunchOptions: Meal[] = [
+    {
+      id: `shuffled-l1-${timestamp}`,
+      name: "High-Protein Soya Chunk Pulao with Cucumber Raita",
+      type: "Lunch",
+      portion: "2 cups pulao + 100g raita",
+      caloriesKcal: 530,
+      proteinGrams: 28,
+      fiberGrams: 11,
+      ingredients: ["Soya Chunks", "Rice", "Curd", "Cucumber"],
+      preparationNotes: "Cook rice with protein-rich soya chunks, whole spices, and serve with cool raita.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-l2-${timestamp}`,
+      name: "Panchmel Dal (5-Lentil Mix) with 2 Rotis & Salad",
+      type: "Lunch",
+      portion: "1.5 cups mixed dal + 2 chapatis + cucumber",
+      caloriesKcal: 510,
+      proteinGrams: 24,
+      fiberGrams: 12,
+      ingredients: ["Toor Dal", "Moong Dal", "Atta", "Tomatoes"],
+      preparationNotes: "Combine 5 key lentils cooked with turmeric, garlic, and cumin. Serve hot with rotis.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-l3-${timestamp}`,
+      name: "Sprouted Kala Chana Masala with Jeera Rice",
+      type: "Lunch",
+      portion: "1.5 cups chana curry + 1 cup rice",
+      caloriesKcal: 520,
+      proteinGrams: 25,
+      fiberGrams: 13,
+      ingredients: ["Sprouted Moong/Chana", "Rice", "Tomatoes", "Onions"],
+      preparationNotes: "Simmer sprouted black chickpeas in garlic tomato gravy and serve with cumin rice.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+  ];
+
+  const snackOptions: Meal[] = [
+    {
+      id: `shuffled-s1-${timestamp}`,
+      name: "Roasted Bhuna Chana & Pumpkin Seed Trail Mix",
+      type: "Evening Snack",
+      portion: "50g roasted chana + 1 tbsp seed mix",
+      caloriesKcal: 200,
+      proteinGrams: 13,
+      fiberGrams: 7,
+      ingredients: ["Roasted Chana", "Chia Seeds", "Flax Seeds"],
+      preparationNotes: "Toss crunchy roasted chana with toasted flax/chia seeds and rock salt.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-s2-${timestamp}`,
+      name: "Tawa Toasted Soya & Moong Cutlets (3 Pcs)",
+      type: "Evening Snack",
+      portion: "3 Cutlets + green chutney",
+      caloriesKcal: 220,
+      proteinGrams: 18,
+      fiberGrams: 7,
+      ingredients: ["Soya Chunks", "Sprouted Moong", "Green Chillies"],
+      preparationNotes: "Mash boiled soya and sprouted moong, shape into patties and crisp on tawa.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-s3-${timestamp}`,
+      name: "Sprouted Moong & Pomegranate Kosambari Salad",
+      type: "Evening Snack",
+      portion: "1.5 cups fresh salad + lemon dressing",
+      caloriesKcal: 180,
+      proteinGrams: 12,
+      fiberGrams: 8,
+      ingredients: ["Sprouted Moong", "Cucumber", "Lemon"],
+      preparationNotes: "Toss raw sprouted moong with diced cucumber, lemon juice, and roasted cumin.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+  ];
+
+  const dinnerOptions: Meal[] = [
+    {
+      id: `shuffled-d1-${timestamp}`,
+      name: "Soya & Paneer Bhurji Curry with 2 Whole Wheat Rotis",
+      type: "Dinner",
+      portion: "1 cup bhurji + 2 rotis + salad",
+      caloriesKcal: 520,
+      proteinGrams: 30,
+      fiberGrams: 10,
+      ingredients: ["Soya Chunks", "Atta", "Onions", "Tomatoes"],
+      preparationNotes: "Sauté minced soya/paneer with onions and tomatoes until fragrant and serve warm.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-d2-${timestamp}`,
+      name: "Moong Dal Khichdi with Ghee Tadka & Roasted Papad",
+      type: "Dinner",
+      portion: "1.5 cups khichdi + 100g curd",
+      caloriesKcal: 490,
+      proteinGrams: 22,
+      fiberGrams: 9,
+      ingredients: ["Moong Dal", "Rice", "Curd"],
+      preparationNotes: "Soothing moong dal and rice khichdi seasoned with ghee, cumin, and hing.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+    {
+      id: `shuffled-d3-${timestamp}`,
+      name: "Sprouted Usal Curry with 2 Whole Wheat Phulkas",
+      type: "Dinner",
+      portion: "1.5 cups usal + 2 phulkas",
+      caloriesKcal: 510,
+      proteinGrams: 25,
+      fiberGrams: 12,
+      ingredients: ["Sprouted Moong", "Atta", "Tomatoes", "Garlic"],
+      preparationNotes: "Cook sprouted moong in spicy tomato onion broth and serve with phulkas.",
+      isZeroAddedSugar: true,
+      usesPantryStock: true,
+    },
+  ];
+
+  let pool = breakfastOptions;
+  if (normSlot.includes('lunch')) pool = lunchOptions;
+  else if (normSlot.includes('snack')) pool = snackOptions;
+  else if (normSlot.includes('dinner')) pool = dinnerOptions;
+
+  const filtered = pool.filter(m => m.name.toLowerCase() !== currentMealName.toLowerCase());
+  const selected = filtered.length > 0
+    ? filtered[Math.floor(Math.random() * filtered.length)]
+    : pool[Math.floor(Math.random() * pool.length)];
+
+  return selected;
 }
