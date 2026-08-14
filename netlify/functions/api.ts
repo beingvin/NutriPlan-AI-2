@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { generateFallbackMealPlan } from "../../src/lib/mealPlanFallback";
 
 const DIETITIAN_SYSTEM_INSTRUCTION = `
 You are NutriPlan AI, a qualified clinical dietitian AI specializing in personalized Indian vegetarian, zero-added-sugar diet planning based on non-refrigerated pantry stock, local market price bounds (₹150-₹200/day), and official dietary guidelines (ICMR/NIN 2024 and WHO).
@@ -100,18 +101,44 @@ export const handler = async (event: any, context: any) => {
 
     if (path.includes("generate-meal-plan")) {
       const { userProfile, inventory, customPrompt } = body;
-      const prompt = `Generate 7-day plan. Profile: ${JSON.stringify(userProfile)}. Stock: ${JSON.stringify(inventory)}. Custom: ${customPrompt || ''}`;
-      const response = await generateContentWithRetry(ai, {
+      const prompt = `Generate 7-day plan for vegetarian diet. Profile: ${JSON.stringify(userProfile)}. Stock: ${JSON.stringify(inventory)}. Custom: ${customPrompt || ''}`;
+      
+      // Netlify functions timeout in 10s. Set a 7.5 second race limit to ensure response before gateway timeout.
+      const geminiTask = generateContentWithRetry(ai, {
         contents: prompt,
         config: {
           systemInstruction: DIETITIAN_SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
         },
-      });
+      }).then((res) => {
+        if (res && res.text) {
+          try {
+            return JSON.parse(res.text);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      }).catch(() => null);
+
+      const timeoutTask = new Promise((resolve) => setTimeout(() => resolve(null), 7500));
+
+      const planResult = await Promise.race([geminiTask, timeoutTask]);
+
+      if (planResult) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(planResult),
+        };
+      }
+
+      // Fast, deterministic ICMR 2024 compliant fallback plan if Gemini exceeded 7.5 seconds
+      const fallback = generateFallbackMealPlan(userProfile, inventory);
       return {
         statusCode: 200,
         headers,
-        body: response.text || "{}",
+        body: JSON.stringify(fallback),
       };
     }
 

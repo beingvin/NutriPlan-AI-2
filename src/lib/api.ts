@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import { generateFallbackMealPlan } from './mealPlanFallback';
 
 /**
  * Returns the resolved API endpoint URL, taking into account VITE_API_BASE_URL or VITE_API_URL if configured.
@@ -32,7 +33,12 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
       const text = await response.text();
       console.warn(`[API] Received non-JSON response from ${url}:`, text.substring(0, 100));
       
-      // Attempt client-side Gemini fallback if client API key is present
+      // Attempt client-side Gemini fallback if client API key is present or local fallback
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      if (endpoint.includes('generate-meal-plan')) {
+        return generateFallbackMealPlan(body.userProfile, body.inventory);
+      }
+
       const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (clientApiKey) {
         console.log('[API] Attempting client-side fallback using VITE_GEMINI_API_KEY...');
@@ -40,7 +46,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
       }
 
       throw new Error(
-        `API endpoint ${endpoint} returned static HTML/404 instead of JSON. Ensure your Netlify environment variable 'GEMINI_API_KEY' or 'VITE_GEMINI_API_KEY' is set, or 'VITE_API_BASE_URL' points to your backend.`
+        `API endpoint ${endpoint} returned static HTML/404 instead of JSON.`
       );
     }
 
@@ -52,6 +58,12 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
     return await response.json();
   } catch (err: any) {
     console.error(`[API Error] Request to ${url} failed:`, err);
+
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    if (endpoint.includes('generate-meal-plan')) {
+      console.warn('[API Fallback] Using instant fallback meal plan due to API network error/timeout.');
+      return generateFallbackMealPlan(body.userProfile, body.inventory);
+    }
 
     // Fallback if network or non-JSON error occurs and client key exists
     const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -99,6 +111,10 @@ async function handleClientSideGeminiFallback(endpoint: string, options: Request
       allergenSafetyCheck: 'Safe for strict vegetarian diet.',
       rawNote: response.text,
     };
+  }
+
+  if (endpoint.includes('generate-meal-plan')) {
+    return generateFallbackMealPlan(body.userProfile, body.inventory);
   }
 
   throw new Error(`Client-side fallback not implemented for ${endpoint}`);
