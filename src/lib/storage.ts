@@ -10,6 +10,7 @@ export interface BookmarkedMeal extends Meal {
 
 export interface SavedPlanHistory {
   id: string;
+  userName?: string;
   generatedAt: string;
   targetCaloriesKcal: number;
   targetProteinGrams: number;
@@ -174,10 +175,11 @@ export function loadMealPlanHistoryStorage(): SavedPlanHistory[] {
   return [];
 }
 
-export function addPlanToHistory(plan: WeeklyMealPlan): SavedPlanHistory[] {
+export function addPlanToHistory(plan: WeeklyMealPlan, userName?: string): SavedPlanHistory[] {
   const currentHistory = loadMealPlanHistoryStorage();
   const newEntry: SavedPlanHistory = {
     id: `plan_${Date.now()}`,
+    userName: userName?.trim() || 'User',
     generatedAt: plan.generatedAt || new Date().toISOString(),
     targetCaloriesKcal: plan.targetCaloriesKcal,
     targetProteinGrams: plan.targetProteinGrams,

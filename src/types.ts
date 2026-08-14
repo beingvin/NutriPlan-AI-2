@@ -9,6 +9,7 @@ export interface PantryItem {
 }
 
 export interface UserProfile {
+  name: string;
   age: number;
   gender: 'male' | 'female' | 'other';
   heightCm: number;
@@ -61,6 +62,7 @@ export interface ShoppingListItem {
 export interface WeeklyMealPlan {
   planTitle: string;
   summary: string;
+  generatedAt?: string;
   targetProteinGrams: number;
   targetCaloriesKcal: number;
   dailyBudgetInr: number;

@@ -1,6 +1,7 @@
 import { PantryItem, UserProfile } from '../types';
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
+  name: 'Vini',
   age: 35,
   gender: 'male',
   heightCm: 168,

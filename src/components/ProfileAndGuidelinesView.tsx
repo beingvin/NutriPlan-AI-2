@@ -42,6 +42,25 @@ export const ProfileAndGuidelinesView: React.FC<ProfileAndGuidelinesViewProps> =
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="sm:col-span-2 lg:col-span-4 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex-1">
+              <label className="block font-bold text-slate-800 mb-1 flex items-center space-x-1.5">
+                <User className="w-3.5 h-3.5 text-emerald-600" />
+                <span>User Name / Member Name</span>
+              </label>
+              <input
+                type="text"
+                value={userProfile.name || ''}
+                placeholder="e.g. Vini, Rahul, Ananya"
+                onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900 text-xs shadow-2xs"
+              />
+            </div>
+            <div className="text-[11px] text-slate-500 sm:max-w-xs">
+              This name will be saved with all your generated meal plan records, history logs, and PDF exports.
+            </div>
+          </div>
+
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Age (Years)</label>
             <input

@@ -7,7 +7,7 @@ import {
   Leaf, Flame, HeartPulse, Wheat, Activity, Shuffle, Loader2, FileText,
   Copy, Check, Share2, MessageSquare, X, Calendar, Download, Droplet,
   Droplets, Plus, Minus, RotateCcw, Bookmark, BookmarkCheck, History, Code,
-  Search, Trash2, ExternalLink, Filter
+  Search, Trash2, ExternalLink, Filter, User, Clock
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
@@ -193,6 +193,8 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
     if (style === 'simple') {
       let text = `7-DAY VEGETARIAN MEAL PLAN\n`;
       text += `Plan: ${p.planTitle || 'Weekly Plan'}\n`;
+      text += `Member: ${userProfile.name || 'User'}\n`;
+      text += `Date: ${new Date().toLocaleDateString('en-IN')}\n`;
       text += `Daily Target: ${p.targetProteinGrams}g Protein | Est. Grocery: ₹${p.totalWeeklyCostInr}\n`;
       text += `------------------------------------\n\n`;
 
@@ -212,6 +214,7 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
     let text = `🥗 *NutriPlan AI - 7-DAY VEGETARIAN DIET PLAN*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `📌 *${p.planTitle || 'Weekly High-Protein Plan'}*\n`;
+    text += `👤 *Member:* ${userProfile.name || 'User'} | 📅 *Date:* ${new Date().toLocaleDateString('en-IN')}\n`;
     text += `💪 *Target Protein:* ${p.targetProteinGrams}g/day | 💰 *Weekly Grocery:* ₹${p.totalWeeklyCostInr}\n`;
     text += `✅ *Compliance:* ICMR/NIN 2024 & WHO 0g Added Sugar\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -520,9 +523,17 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
         <div className="bg-gradient-to-r from-emerald-900 to-slate-900 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
             <div>
-              <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-300 uppercase tracking-wider mb-1">
-                <Sparkles className="w-4 h-4" />
-                <span>7-Day Vegetarian Meal Plan</span>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-emerald-300 uppercase tracking-wider mb-1">
+                <span className="flex items-center space-x-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  <span>7-Day Vegetarian Meal Plan</span>
+                </span>
+                {userProfile.name && (
+                  <span className="bg-emerald-800/80 text-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-emerald-600/50 flex items-center space-x-1 normal-case">
+                    <User className="w-3 h-3 text-emerald-300" />
+                    <span>Plan for {userProfile.name}</span>
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{plan.planTitle}</h1>
               <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">{plan.summary}</p>
@@ -616,10 +627,6 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
               <History className="w-4 h-4 text-sky-400" />
               <span>Plan History & JSON Data</span>
             </button>
-          </div>
-
-          <div className="text-[11px] font-medium text-slate-500 hidden sm:block">
-            💾 State Auto-Saved in Cookies & LocalStorage
           </div>
         </div>
 
@@ -1282,30 +1289,54 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
                         key={hist.id || idx}
                         className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-sky-50/50 transition-colors"
                       >
-                        <div>
-                          <span className="text-xs font-bold text-slate-900 block">
-                            {hist.plan?.planTitle || `Meal Plan ${idx + 1}`}
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            Generated on: {new Date(hist.generatedAt).toLocaleString('en-IN')} • {hist.targetProteinGrams}g Protein/day • ₹{hist.totalWeeklyCostInr} Grocery
-                          </span>
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">
+                              {hist.plan?.planTitle || `Meal Plan ${idx + 1}`}
+                            </span>
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
+                              <User className="w-3 h-3 text-emerald-600" />
+                              <span>{hist.userName || userProfile.name || 'User'}</span>
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                            <span className="flex items-center space-x-1 text-slate-600 font-medium">
+                              <Clock className="w-3 h-3 text-sky-500" />
+                              <span>
+                                {new Date(hist.generatedAt).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}{' '}
+                                •{' '}
+                                {new Date(hist.generatedAt).toLocaleTimeString('en-IN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </span>
+                            <span>•</span>
+                            <span className="text-emerald-700 font-semibold">{hist.targetProteinGrams}g Protein/day</span>
+                            <span>•</span>
+                            <span>₹{hist.totalWeeklyCostInr} Weekly Grocery</span>
+                          </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 shrink-0">
                           {onUpdatePlan && (
                             <button
                               onClick={() => {
                                 if (hist.plan) {
                                   onUpdatePlan(hist.plan);
                                   setPlannerSubTab('weekly');
-                                  setShuffleToast(`Restored Meal Plan from ${new Date(hist.generatedAt).toLocaleDateString()}!`);
+                                  setShuffleToast(`Restored Meal Plan for ${hist.userName || userProfile.name || 'User'} (${new Date(hist.generatedAt).toLocaleDateString()})!`);
                                   setTimeout(() => setShuffleToast(null), 3000);
                                 }
                               }}
                               className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-2xs"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Restore This Plan</span>
+                              <span>Restore Plan</span>
                             </button>
                           )}
                         </div>
@@ -1458,10 +1489,13 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
         <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">NutriPlan AI — 7-Day High-Protein Diet Plan</h1>
-            <p className="text-sm font-semibold text-emerald-800">{plan.planTitle}</p>
+            <p className="text-sm font-semibold text-emerald-800">
+              {plan.planTitle} {userProfile.name ? `• Member: ${userProfile.name}` : ''}
+            </p>
             <p className="text-xs text-slate-700 mt-1 max-w-xl">{plan.summary}</p>
           </div>
           <div className="text-right text-xs space-y-0.5">
+            <p className="font-bold text-slate-900">Date: {new Date().toLocaleDateString('en-IN')}</p>
             <p className="font-bold text-slate-900">Daily Target: {plan.targetProteinGrams}g Protein</p>
             <p className="text-slate-700">Weekly Grocery: ₹{plan.totalWeeklyCostInr}</p>
             <p className="text-emerald-800 font-bold">ICMR 2024 & WHO Approved</p>

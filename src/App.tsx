@@ -92,7 +92,7 @@ export default function App() {
 
       setPlan(data);
       saveMealPlanStorage(data);
-      addPlanToHistory(data);
+      addPlanToHistory(data, userProfile.name);
       setActiveTab('planner');
       showToast('Successfully generated 7-Day Vegetarian Meal Plan!');
     } catch (err: any) {
