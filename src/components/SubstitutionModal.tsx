@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SubstitutionResult, PantryItem, UserProfile } from '../types';
 import { X, RefreshCw, CheckCircle2, ShieldCheck, Sparkles, Scale } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 
 interface SubstitutionModalProps {
   isOpen: boolean;
@@ -31,9 +32,8 @@ export const SubstitutionModal: React.FC<SubstitutionModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/substitute', {
+      const data = await apiFetch('/api/substitute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           missingItem,
           mealName,
@@ -41,8 +41,6 @@ export const SubstitutionModal: React.FC<SubstitutionModalProps> = ({
           allergies: userProfile.allergies,
         }),
       });
-      if (!response.ok) throw new Error('Failed to fetch substitution advice');
-      const data = await response.json();
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Error generating substitution');

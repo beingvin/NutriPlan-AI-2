@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, MessageSquare, ShoppingBag, UtensilsCrossed, User, ShieldAlert, Sparkles, RefreshCw } from 'lucide-react';
+import { Calendar, MessageSquare, ShoppingBag, UtensilsCrossed, User, ShieldAlert, Sparkles, RefreshCw, HardDrive } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'planner' | 'chat' | 'pantry' | 'shopping' | 'profile';
@@ -7,6 +7,7 @@ interface NavbarProps {
   onLoadPreset: (preset: 'full' | 'low' | 'high_protein') => void;
   isGeneratingPlan: boolean;
   onGeneratePlan: () => void;
+  onOpenDriveModal: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLoadPreset,
   isGeneratingPlan,
   onGeneratePlan,
+  onOpenDriveModal,
 }) => {
   return (
     <header className="bg-white border-b border-emerald-100 sticky top-0 z-30 shadow-xs">
@@ -103,6 +105,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Action */}
           <div className="flex items-center space-x-2">
+            <button
+              onClick={onOpenDriveModal}
+              className="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg shadow-2xs flex items-center space-x-1.5 transition-all border border-blue-200"
+              title="Google Drive Sync & Backup"
+            >
+              <HardDrive className="w-4 h-4 text-blue-600" />
+              <span className="hidden lg:inline">Google Drive</span>
+            </button>
+
             <button
               onClick={onGeneratePlan}
               disabled={isGeneratingPlan}

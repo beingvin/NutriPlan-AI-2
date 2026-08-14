@@ -5,6 +5,8 @@ import { ChatAssistantView } from './components/ChatAssistantView';
 import { PantryManagerView } from './components/PantryManagerView';
 import { ShoppingTrackerView } from './components/ShoppingTrackerView';
 import { ProfileAndGuidelinesView } from './components/ProfileAndGuidelinesView';
+import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
+import { apiFetch } from './lib/api';
 
 import { UserProfile, PantryItem, WeeklyMealPlan } from './types';
 import {
@@ -21,6 +23,7 @@ export default function App() {
   const [plan, setPlan] = useState<WeeklyMealPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -46,9 +49,8 @@ export default function App() {
   const handleGeneratePlan = async (customPrompt?: string) => {
     setLoadingPlan(true);
     try {
-      const response = await fetch('/api/generate-meal-plan', {
+      const data = await apiFetch('/api/generate-meal-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userProfile,
           inventory,
@@ -56,8 +58,6 @@ export default function App() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate 7-day meal plan');
-      const data = await response.json();
       setPlan(data);
       setActiveTab('planner');
       showToast('Successfully generated 7-Day Vegetarian Meal Plan!');
@@ -85,6 +85,18 @@ export default function App() {
         onLoadPreset={handleLoadPreset}
         isGeneratingPlan={loadingPlan}
         onGeneratePlan={() => handleGeneratePlan()}
+        onOpenDriveModal={() => setIsDriveModalOpen(true)}
+      />
+
+      {/* Google Drive Integration Modal */}
+      <GoogleDriveSyncModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        inventory={inventory}
+        setInventory={setInventory}
+        plan={plan}
+        setPlan={(newPlan) => setPlan(newPlan)}
+        showToast={showToast}
       />
 
       {/* Toast Notification */}

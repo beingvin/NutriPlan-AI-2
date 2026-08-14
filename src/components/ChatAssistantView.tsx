@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChatMessage, PantryItem, UserProfile } from '../types';
 import { Send, Bot, User, Sparkles, RefreshCw, CheckCircle, ShieldAlert, BookOpen } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 
 interface ChatAssistantViewProps {
   inventory: PantryItem[];
@@ -57,9 +58,8 @@ export const ChatAssistantView: React.FC<ChatAssistantViewProps> = ({
     setLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const data = await apiFetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, userMsg],
           userProfile,
@@ -67,13 +67,10 @@ export const ChatAssistantView: React.FC<ChatAssistantViewProps> = ({
         }),
       });
 
-      if (!response.ok) throw new Error('Chat API returned an error');
-      const data = await response.json();
-
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: data.text || 'I have processed your nutrition request.',
+        text: data.response || data.text || 'I have processed your nutrition request.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 

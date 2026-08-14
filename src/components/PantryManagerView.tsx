@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { PantryItem } from '../types';
 import { Plus, Trash2, Camera, Upload, Sparkles, RefreshCw, CheckCircle2, Shield, Box, Tag, Edit2, Check, X } from 'lucide-react';
 import { PantryAnalyticsChart } from './PantryAnalyticsChart';
+import { apiFetch } from '../lib/api';
 
 interface PantryManagerViewProps {
   inventory: PantryItem[];
@@ -95,14 +96,10 @@ export const PantryManagerView: React.FC<PantryManagerViewProps> = ({
         const base64Data = (reader.result as string).split(',')[1];
         const mimeType = file.type || 'image/jpeg';
 
-        const res = await fetch('/api/scan-pantry-image', {
+        const data = await apiFetch('/api/scan-pantry-image', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64Data, mimeType }),
         });
-
-        if (!res.ok) throw new Error('Pantry scan failed');
-        const data = await res.json();
 
         if (data.items && Array.isArray(data.items) && data.items.length > 0) {
           const scannedItems: PantryItem[] = data.items.map((item: any, index: number) => ({
