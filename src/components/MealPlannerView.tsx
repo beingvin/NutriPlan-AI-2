@@ -90,6 +90,9 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
   const [copiedText, setCopiedText] = useState(false);
   const [textFormatStyle, setTextFormatStyle] = useState<'whatsapp' | 'simple'>('whatsapp');
 
+  // Copy Individual Meal Snippet State
+  const [copiedMealKey, setCopiedMealKey] = useState<string | null>(null);
+
   // Eaten status helpers
   const getEatenDayKey = (dayNum: number) => `day_${dayNum}_${userProfile.id || 'default'}`;
 
@@ -376,6 +379,68 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
   };
 
+  /**
+   * Formats an individual recipe's macro breakdown, portion, ingredients,
+   * and cooking instructions into a clean, shareable text snippet.
+   */
+  const formatMealRecipeSnippet = (meal: Meal, slotLabel: string, dayTitle?: string): string => {
+    const mealFiber = getMealFiber(meal);
+    const dayLabel = dayTitle || currentDay?.dayName || `Day ${selectedDayIndex + 1}`;
+
+    let text = `🥗 *DietPlan AI — ${slotLabel.toUpperCase()} RECIPE*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `🍽️ *Dish:* ${meal.name}\n`;
+    text += `📅 *Meal Slot:* ${slotLabel} (${dayLabel})\n`;
+    text += `📏 *Portion:* ${meal.portion}\n\n`;
+
+    text += `📊 *Nutritional Breakdown (per serving):*\n`;
+    text += `• Energy: ${meal.caloriesKcal} kcal\n`;
+    text += `• Protein: ${meal.proteinGrams}g\n`;
+    text += `• Dietary Fiber: ${mealFiber}g\n`;
+    if (meal.isZeroAddedSugar) {
+      text += `• Sugar: 0g Added Sugar (WHO Standard)\n`;
+    }
+    if (meal.usesPantryStock) {
+      text += `• Stock: Prepared using non-refrigerated pantry staples\n`;
+    }
+
+    text += `\n🛒 *Key Ingredients:*\n`;
+    if (meal.ingredients && meal.ingredients.length > 0) {
+      meal.ingredients.forEach((ing) => {
+        text += `• ${ing}\n`;
+      });
+    } else {
+      text += `• Fresh pantry staples (see preparation instructions)\n`;
+    }
+
+    if (meal.preparationNotes) {
+      text += `\n👩‍🍳 *Preparation & Cooking Instructions:*\n`;
+      text += `${meal.preparationNotes}\n`;
+    }
+
+    text += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `✨ _Personalized Vegetarian Recipe via DietPlan AI (ICMR 2024 Guidelines)_`;
+    return text;
+  };
+
+  const handleCopyMealSnippet = (meal: Meal, slotLabel: string, dayTitle?: string) => {
+    try {
+      const text = formatMealRecipeSnippet(meal, slotLabel, dayTitle);
+      navigator.clipboard.writeText(text);
+      const copyKey = `${slotLabel}_${meal.name}`;
+      setCopiedMealKey(copyKey);
+      setShuffleToast(`Copied "${meal.name}" recipe to clipboard! 📋`);
+      setTimeout(() => {
+        setCopiedMealKey((prev) => (prev === copyKey ? null : prev));
+      }, 2500);
+      setTimeout(() => {
+        setShuffleToast(null);
+      }, 3500);
+    } catch (err) {
+      console.error('Failed to copy meal snippet:', err);
+    }
+  };
+
   const handleShuffleRecipe = async (slotLabel: string, currentMeal: Meal) => {
     if (!plan) return;
     setShufflingSlot(slotLabel);
@@ -485,9 +550,9 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
         )}
 
         <div>
-          {/* Header with Slot Label, Eaten Checkbox & Bookmark Action */}
+          {/* Header with Slot Label, Eaten Checkbox, Bookmark Action & Copy Recipe Snippet */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md group-hover:bg-emerald-100 transition-colors">
                 {label}
               </span>
@@ -508,6 +573,7 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
                 <span>{eaten ? 'Eaten ✓' : 'Mark Eaten'}</span>
               </motion.button>
 
+              {/* Bookmark Toggle */}
               <motion.button
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
@@ -521,6 +587,31 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
               >
                 <BookmarkCheck className={`w-3.5 h-3.5 ${isBookmarked ? 'text-amber-600 fill-amber-500' : 'text-slate-400'}`} />
                 <span>{isBookmarked ? 'Saved' : 'Bookmark'}</span>
+              </motion.button>
+
+              {/* Copy Recipe Snippet to Clipboard */}
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => handleCopyMealSnippet(meal, label, currentDay?.dayName)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold border flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs ${
+                  copiedMealKey === `${label}_${meal.name}`
+                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-slate-200'
+                }`}
+                title="Copy formatted recipe details, macros, ingredients & instructions to clipboard"
+              >
+                {copiedMealKey === `${label}_${meal.name}` ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-emerald-800 font-bold">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Copy</span>
+                  </>
+                )}
               </motion.button>
             </div>
 
@@ -1908,13 +1999,32 @@ export const MealPlannerView: React.FC<MealPlannerViewProps> = ({
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                       <span>Saved: {fav.bookmarkedAt || 'Recently'}</span>
-                      <button
-                        onClick={() => handleOpenSubstitution(fav.name)}
-                        className="text-emerald-700 font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
-                      >
-                        <ArrowRightLeft className="w-3 h-3" />
-                        <span>Substitute</span>
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleCopyMealSnippet(fav, fav.mealSlot || 'Favorite Recipe', 'Saved Favorites')}
+                          className="text-slate-600 hover:text-emerald-700 font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+                          title="Copy recipe details to clipboard"
+                        >
+                          {copiedMealKey === `${fav.mealSlot || 'Favorite Recipe'}_${fav.name}` ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span className="text-emerald-700 font-bold">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-slate-400" />
+                              <span>Copy Recipe</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleOpenSubstitution(fav.name)}
+                          className="text-emerald-700 font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
+                        >
+                          <ArrowRightLeft className="w-3 h-3" />
+                          <span>Substitute</span>
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
