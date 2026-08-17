@@ -1,0 +1,17 @@
+{
+  "name": "DietPlan AI — Personalized Diet Planner",
+  "short_name": "DietPlan AI",
+  "description": "Personalized Vegetarian & Zero-Added-Sugar Diet Planner powered by Gemini AI, pantry inventory management, and ICMR 2024 guidelines.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

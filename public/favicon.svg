@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="dietPlanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#064e3b" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background container with rounded corners -->
+  <rect width="512" height="512" rx="128" fill="url(#dietPlanGrad)" />
+
+  <!-- Subtle glow inner ring -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="none" stroke="#6ee7b7" stroke-width="4" stroke-opacity="0.4" />
+
+  <!-- Cutlery & Leaf Centerpiece -->
+  <g filter="url(#shadow)" transform="translate(256, 256)">
+    <!-- Fork (Left Angle) -->
+    <path d="M -90,-120 
+             L -90,-40 
+             C -90,-10 -65,10 -45,15 
+             L -45,130 
+             C -45,142 -55,152 -67,152 
+             C -79,152 -89,142 -89,130 
+             L -89,130 
+             L -55,130
+             M -90,-120 L -90,-60
+             M -65,-120 L -65,-40
+             M -40,-120 L -40,-40" 
+          fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Knife/Spoon Stylized Line (Right Angle) -->
+    <path d="M 70,-120 
+             C 95,-120 100,-70 85,-20 
+             C 75,5 55,15 45,18 
+             L 45,130 
+             C 45,142 55,152 67,152" 
+          fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Central Healthy Leaf Sprout Symbol -->
+    <path d="M 0,40 
+             C -60,-20 -50,-110 0,-140 
+             C 50,-110 60,-20 0,40 Z" 
+          fill="#a7f3d0" fill-opacity="0.95" />
+
+    <!-- Leaf Vein -->
+    <path d="M 0,35 L 0,-120" stroke="#047857" stroke-width="8" stroke-linecap="round" />
+    <path d="M 0,-50 Q 20,-70 30,-85" stroke="#047857" stroke-width="6" stroke-linecap="round" fill="none" />
+    <path d="M 0,-20 Q -20,-40 -30,-55" stroke="#047857" stroke-width="6" stroke-linecap="round" fill="none" />
+
+    <!-- AI Sparkle Star -->
+    <path d="M 120,-80 Q 120,-50 145,-50 Q 120,-50 120,-20 Q 120,-50 95,-50 Q 120,-50 120,-80 Z" 
+          fill="#fef08a" />
+    <path d="M -110,60 Q -110,75 -95,75 Q -110,75 -110,90 Q -110,75 -125,75 Q -110,75 -110,60 Z" 
+          fill="#fef08a" />
+  </g>
+</svg>
