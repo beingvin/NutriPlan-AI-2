@@ -5,7 +5,7 @@ import {
   googleSignIn,
   googleSignOut,
   uploadFileToDrive,
-  listNutriPlanDriveFiles,
+  listDietPlanDriveFiles,
   downloadDriveFileContent,
   deleteDriveFile,
   DriveFile,
@@ -76,7 +76,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     if (!token) return;
     setLoadingFiles(true);
     try {
-      const files = await listNutriPlanDriveFiles();
+      const files = await listDietPlanDriveFiles();
       setDriveFiles(files);
     } catch (err: any) {
       console.error('Fetch Drive files error:', err);
@@ -123,9 +123,9 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     setActionStatus('Backing up pantry inventory to Google Drive...');
     try {
       const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `NutriPlan_Pantry_Backup_${dateStr}.json`;
+      const fileName = `DietPlan_Pantry_Backup_${dateStr}.json`;
       const payload = JSON.stringify({
-        app: 'NutriPlan AI',
+        app: 'DietPlan AI',
         type: 'pantry_backup',
         createdAt: new Date().toISOString(),
         itemCount: inventory.length,
@@ -154,9 +154,9 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     setActionStatus('Backing up 7-day meal plan to Google Drive...');
     try {
       const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `NutriPlan_MealPlan_${dateStr}.json`;
+      const fileName = `DietPlan_MealPlan_${dateStr}.json`;
       const payload = JSON.stringify({
-        app: 'NutriPlan AI',
+        app: 'DietPlan AI',
         type: 'meal_plan_backup',
         createdAt: new Date().toISOString(),
         mealPlan: plan,
@@ -184,9 +184,9 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
     setActionStatus('Exporting readable meal plan text summary to Google Drive...');
     try {
       const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `NutriPlan_MealPlan_Summary_${dateStr}.txt`;
+      const fileName = `DietPlan_MealPlan_Summary_${dateStr}.txt`;
 
-      let summaryText = `NutriPlan AI - 7-Day Vegetarian Meal Plan Summary\nGenerated: ${new Date().toLocaleString()}\n\n`;
+      let summaryText = `DietPlan AI - 7-Day Vegetarian Meal Plan Summary\nGenerated: ${new Date().toLocaleString()}\n\n`;
       summaryText += `NUTRITIONAL TARGETS:\n`;
       summaryText += `- Daily Calorie Target: ${plan.weeklyMacroSummary?.avgDailyCalories || 1800} kcal\n`;
       summaryText += `- Daily Protein Target: ${plan.weeklyMacroSummary?.avgDailyProteinGrams || 80} g\n`;
@@ -422,7 +422,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] text-slate-500">
-                  NutriPlan Files in Google Drive
+                  DietPlan Files in Google Drive
                 </h3>
                 <button
                   onClick={fetchDriveFiles}
@@ -438,7 +438,7 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
                 <div className="p-6 text-center text-slate-400">Loading files from Google Drive...</div>
               ) : driveFiles.length === 0 ? (
                 <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 bg-slate-50/50">
-                  No NutriPlan backups found in your Google Drive yet. Click one of the backup buttons above to save your first file!
+                  No DietPlan backups found in your Google Drive yet. Click one of the backup buttons above to save your first file!
                 </div>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">

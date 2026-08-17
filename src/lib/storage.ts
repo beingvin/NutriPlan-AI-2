@@ -1,4 +1,4 @@
-import { UserProfile, PantryItem, WeeklyMealPlan, Meal } from '../types';
+import { UserProfile, PantryItem, WeeklyMealPlan, Meal, FamilyMemberProfile, EatenDayRecord, PricingTier } from '../types';
 
 export interface BookmarkedMeal extends Meal {
   id: string;
@@ -190,4 +190,83 @@ export function addPlanToHistory(plan: WeeklyMealPlan, userName?: string): Saved
   const updatedHistory = [newEntry, ...currentHistory.filter(h => h.id !== newEntry.id)].slice(0, 10);
   saveMealPlanHistoryStorage(updatedHistory);
   return updatedHistory;
+}
+
+// 6. Multi-Member / Family Profiles Storage
+export function saveFamilyProfilesStorage(profiles: FamilyMemberProfile[]): void {
+  const jsonStr = JSON.stringify(profiles);
+  try {
+    localStorage.setItem('nutriplan_family_profiles', jsonStr);
+    setCookie('nutriplan_family_profiles', jsonStr, 30);
+  } catch (e) {
+    console.warn('localStorage error', e);
+  }
+}
+
+export function loadFamilyProfilesStorage(): FamilyMemberProfile[] {
+  try {
+    const localData = localStorage.getItem('nutriplan_family_profiles');
+    if (localData) return JSON.parse(localData);
+    const cookieData = getCookie('nutriplan_family_profiles');
+    if (cookieData) return JSON.parse(cookieData);
+  } catch (err) {
+    console.warn('[Storage] Error loading family profiles:', err);
+  }
+  return [];
+}
+
+export function saveActiveMemberIdStorage(id: string): void {
+  try {
+    localStorage.setItem('nutriplan_active_member_id', id);
+    setCookie('nutriplan_active_member_id', id, 30);
+  } catch (e) {
+    console.warn('localStorage error', e);
+  }
+}
+
+export function loadActiveMemberIdStorage(): string | null {
+  try {
+    return localStorage.getItem('nutriplan_active_member_id') || getCookie('nutriplan_active_member_id');
+  } catch (err) {
+    return null;
+  }
+}
+
+// 7. Eaten Meals & Daily Consumption Tracker
+export function saveEatenRecordsStorage(records: Record<string, EatenDayRecord>): void {
+  try {
+    localStorage.setItem('nutriplan_eaten_records', JSON.stringify(records));
+  } catch (e) {
+    console.warn('localStorage error', e);
+  }
+}
+
+export function loadEatenRecordsStorage(): Record<string, EatenDayRecord> {
+  try {
+    const local = localStorage.getItem('nutriplan_eaten_records');
+    if (local) return JSON.parse(local);
+  } catch (err) {
+    console.warn('[Storage] Error loading eaten records:', err);
+  }
+  return {};
+}
+
+// 8. Pricing Tier Storage
+export function savePricingTierStorage(tier: PricingTier): void {
+  try {
+    localStorage.setItem('nutriplan_pricing_tier', tier);
+    setCookie('nutriplan_pricing_tier', tier, 30);
+  } catch (e) {
+    console.warn('localStorage error', e);
+  }
+}
+
+export function loadPricingTierStorage(): PricingTier {
+  try {
+    const tier = (localStorage.getItem('nutriplan_pricing_tier') || getCookie('nutriplan_pricing_tier')) as PricingTier;
+    if (tier === 'mandi' || tier === 'quick_commerce' || tier === 'supermarket') return tier;
+  } catch (err) {
+    console.warn('[Storage] Error loading pricing tier:', err);
+  }
+  return 'mandi';
 }

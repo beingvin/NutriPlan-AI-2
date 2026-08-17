@@ -141,14 +141,14 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-lg border border-slate-700 animate-bounce flex items-center space-x-2">
+        <div className="fixed bottom-20 md:bottom-5 right-4 md:right-5 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-lg border border-slate-700 animate-bounce flex items-center space-x-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 md:pb-6">
         {activeTab === 'planner' && (
           <MealPlannerView
             plan={plan}
@@ -192,7 +192,7 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 text-slate-500 py-4 text-center text-xs">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            <strong>NutriPlan AI</strong> • Personalized Vegetarian & Zero-Added-Sugar Diet Planner
+            <strong>DietPlan AI</strong> • Personalized Vegetarian & Zero-Added-Sugar Diet Planner
           </span>
           <span>Aligned with ICMR/NIN (2024), WHO Free Sugar Rules & Indian Price Monitoring Data</span>
         </div>

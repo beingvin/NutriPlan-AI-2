@@ -1,5 +1,5 @@
 {
-  "name": "NutriPlan AI",
+  "name": "DietPlan AI",
   "description": "Personalized Vegetarian & Zero-Added-Sugar Diet Planner powered by Gemini AI. Uses non-refrigerated pantry stock, ICMR/WHO guidelines, budget monitoring, and OCR pantry scanning.",
   "requestFramePermissions": [
     "camera"

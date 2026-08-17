@@ -100,7 +100,7 @@ export const ChatAssistantView: React.FC<ChatAssistantViewProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-              <span>NutriPlan AI Dietitian</span>
+              <span>DietPlan AI Dietitian</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </h2>
             <p className="text-[11px] text-slate-500">

@@ -9,6 +9,7 @@ export interface PantryItem {
 }
 
 export interface UserProfile {
+  id?: string;
   name: string;
   age: number;
   gender: 'male' | 'female' | 'other';
@@ -22,6 +23,27 @@ export interface UserProfile {
   dietaryPreferences: string;
   dailyBudgetInr: number;
 }
+
+export interface FamilyMemberProfile extends UserProfile {
+  id: string;
+  isDefault?: boolean;
+  avatarColor?: string;
+}
+
+export interface EatenDayRecord {
+  date: string; // YYYY-MM-DD
+  dayNumber: number;
+  memberId: string;
+  mealsEaten: {
+    breakfast: boolean;
+    lunch: boolean;
+    eveningSnack: boolean;
+    dinner: boolean;
+  };
+  pantryDeducted: boolean;
+}
+
+export type PricingTier = 'mandi' | 'quick_commerce' | 'supermarket';
 
 export interface Meal {
   id: string;

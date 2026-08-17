@@ -112,15 +112,15 @@ export const uploadFileToDrive = async (
 };
 
 /**
- * List files saved in Google Drive (filtered to NutriPlan backup files).
+ * List files saved in Google Drive (filtered to DietPlan / NutriPlan backup files).
  */
-export const listNutriPlanDriveFiles = async (): Promise<DriveFile[]> => {
+export const listDietPlanDriveFiles = async (): Promise<DriveFile[]> => {
   const token = await getAccessToken();
   if (!token) {
     throw new Error('Not authenticated with Google Drive.');
   }
 
-  const query = encodeURIComponent("trashed = false and (name contains 'NutriPlan' or name contains 'MealPlan' or name contains 'Pantry')");
+  const query = encodeURIComponent("trashed = false and (name contains 'DietPlan' or name contains 'NutriPlan' or name contains 'MealPlan' or name contains 'Pantry')");
   const response = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType,createdTime,modifiedTime,size)&orderBy=modifiedTime desc`,
     {
@@ -138,6 +138,9 @@ export const listNutriPlanDriveFiles = async (): Promise<DriveFile[]> => {
   const data = await response.json();
   return data.files || [];
 };
+
+// Backwards compatibility alias
+export const listNutriPlanDriveFiles = listDietPlanDriveFiles;
 
 /**
  * Read the content of a file from Google Drive by fileId.
